@@ -1,0 +1,79 @@
+import Foundation
+
+struct OpenAICompatibleEngine: TranslationEngine {
+    let engineType = EngineType.openAICompatible
+    let configID: UUID
+    let endpoint: String
+    let modelID: String
+
+    init(config: EngineConfig) throws {
+        self.configID = config.id
+        guard let ep = config.endpointURL, !ep.isEmpty else {
+            throw TranslationError.invalidEndpoint
+        }
+        self.endpoint = ep
+        self.modelID = config.modelID ?? "gpt-4o-mini"
+        // API Key 改为按需加载，避免 App 启动时触发 Keychain 授权弹窗
+    }
+
+    private func loadAPIKey() -> String {
+        (try? KeychainHelper.load(key: configID.uuidString)) ?? ""
+    }
+
+    func translate(texts: [String], from sourceLang: String, to targetLang: String) async throws -> [String] {
+        let apiKey = loadAPIKey()
+        let numbered = texts.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
+        let body: [String: Any] = [
+            "model": modelID,
+            "messages": [
+                ["role": "system", "content": "You are a professional translator. Translate the following numbered texts from \(sourceLang) to \(targetLang). Return ONLY the translated texts in the same numbered format."],
+                ["role": "user", "content": numbered]
+            ],
+            "temperature": 0.1,
+            "max_tokens": 2048
+        ]
+        let responseText = try await postJSON(to: "\(endpoint)/chat/completions", body: body, apiKey: apiKey)
+        return parseNumberedResponse(responseText, expectedCount: texts.count)
+    }
+
+    func testConnection() async throws -> Bool {
+        let apiKey = loadAPIKey()
+        let body: [String: Any] = [
+            "model": modelID,
+            "messages": [["role": "user", "content": "Say OK"]],
+            "max_tokens": 5
+        ]
+        _ = try await postJSON(to: "\(endpoint)/chat/completions", body: body, apiKey: apiKey)
+        return true
+    }
+
+    private func postJSON(to urlString: String, body: [String: Any], apiKey: String) async throws -> String {
+        guard let url = URL(string: urlString) else { throw TranslationError.invalidEndpoint }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if !apiKey.isEmpty {
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.timeoutInterval = 30
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw TranslationError.networkError(URLError(.badServerResponse))
+        }
+        if http.statusCode == 429 { throw TranslationError.rateLimited }
+        guard http.statusCode == 200 else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw TranslationError.invalidResponse("HTTP \(http.statusCode): \(body)")
+        }
+
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let choices = json["choices"] as? [[String: Any]],
+              let message = choices.first?["message"] as? [String: Any],
+              let content = message["content"] as? String else {
+            throw TranslationError.invalidResponse("无法解析 OpenAI 响应")
+        }
+        return content
+    }
+}

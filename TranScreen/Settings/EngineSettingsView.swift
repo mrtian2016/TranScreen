@@ -1,0 +1,350 @@
+import SwiftUI
+import SwiftData
+
+struct EngineSettingsView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \EngineConfig.sortOrder) private var engines: [EngineConfig]
+    @EnvironmentObject var appState: AppState
+
+    @State private var showAddSheet = false
+    @State private var editingEngine: EngineConfig?
+    @State private var testResults: [UUID: TestResult] = [:]
+
+    enum TestResult { case testing, success, failure(String) }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            List {
+                ForEach(engines) { engine in
+                    EngineRow(engine: engine, testResult: testResults[engine.id]) {
+                        testEngine(engine)
+                    } onEdit: {
+                        editingEngine = engine
+                    }
+                }
+                .onMove(perform: moveEngines)
+                .onDelete(perform: deleteEngines)
+            }
+            .listStyle(.inset)
+
+            Divider()
+
+            HStack {
+                Button { showAddSheet = true } label: { Image(systemName: "plus") }
+                    .buttonStyle(.borderless)
+                Spacer()
+                Text("拖拽调整优先级").font(.caption).foregroundStyle(.secondary)
+            }
+            .padding(8)
+        }
+        .sheet(isPresented: $showAddSheet) {
+            EngineEditSheet(engine: nil) { config in
+                config.sortOrder = engines.count
+                modelContext.insert(config)
+                try? modelContext.save()
+                refreshEnginesInAppState()
+            }
+        }
+        .sheet(item: $editingEngine) { engine in
+            EngineEditSheet(engine: engine) { _ in
+                try? modelContext.save()
+                refreshEnginesInAppState()
+            }
+        }
+    }
+
+    // 从 modelContext 重新拉取最新引擎列表注入 AppState
+    // 必要：@Query 在 insert/delete 后不会同步更新，直接传 engines 会用旧快照
+    private func refreshEnginesInAppState() {
+        let descriptor = FetchDescriptor<EngineConfig>(sortBy: [SortDescriptor(\.sortOrder)])
+        let fresh = (try? modelContext.fetch(descriptor)) ?? []
+        appState.reloadEngines(from: fresh)
+    }
+
+    private func deleteEngines(at indexSet: IndexSet) {
+        for i in indexSet {
+            let engine = engines[i]
+            try? KeychainHelper.delete(key: engine.id.uuidString)
+            modelContext.delete(engine)
+        }
+        try? modelContext.save()
+        for (i, engine) in engines.enumerated() { engine.sortOrder = i }
+        try? modelContext.save()
+        refreshEnginesInAppState()
+    }
+
+    private func moveEngines(from source: IndexSet, to destination: Int) {
+        var reordered = engines
+        reordered.move(fromOffsets: source, toOffset: destination)
+        for (i, engine) in reordered.enumerated() { engine.sortOrder = i }
+        try? modelContext.save()
+        refreshEnginesInAppState()
+    }
+
+    private func testEngine(_ engine: EngineConfig) {
+        testResults[engine.id] = .testing
+        Task {
+            do {
+                let testEng = try buildTestEngine(from: engine)
+                _ = try await testEng.testConnection()
+                testResults[engine.id] = .success
+            } catch {
+                testResults[engine.id] = .failure(error.localizedDescription)
+            }
+        }
+    }
+
+    private func buildTestEngine(from config: EngineConfig) throws -> any TranslationEngine {
+        switch config.engineType {
+        case .apple: return AppleTranslationEngine(configID: config.id)
+        case .openAICompatible: return try OpenAICompatibleEngine(config: config)
+        case .anthropic: return try AnthropicEngine(config: config)
+        case .gemini: return try GeminiEngine(config: config)
+        case .deepL: return try DeepLEngine(config: config)
+        case .ollama: return try OllamaEngine(config: config)
+        }
+    }
+}
+
+struct EngineRow: View {
+    let engine: EngineConfig
+    let testResult: EngineSettingsView.TestResult?
+    let onTest: () -> Void
+    let onEdit: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Toggle("", isOn: Binding(get: { engine.isEnabled }, set: { engine.isEnabled = $0 }))
+                .labelsHidden()
+
+            Image(systemName: engineIcon(engine.engineType))
+                .foregroundStyle(.secondary).frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(engine.displayName).font(.body)
+                Text(engine.engineType.displayName).font(.caption).foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if let result = testResult {
+                switch result {
+                case .testing:
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .controlSize(.small)
+                case .success: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                case .failure(let msg): Image(systemName: "xmark.circle.fill").foregroundStyle(.red).help(msg)
+                }
+            }
+
+            Button("测试") { onTest() }.buttonStyle(.borderless).foregroundStyle(.blue)
+            Button(action: onEdit) { Image(systemName: "pencil") }.buttonStyle(.borderless)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func engineIcon(_ type: EngineType) -> String {
+        switch type {
+        case .apple: return "apple.logo"
+        case .openAICompatible: return "bolt.circle"
+        case .anthropic: return "brain.head.profile"
+        case .gemini: return "sparkles"
+        case .deepL: return "globe"
+        case .ollama: return "desktopcomputer"
+        }
+    }
+}
+
+struct EngineEditSheet: View {
+    let engine: EngineConfig?
+    let onSave: (EngineConfig) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedType: EngineType = .openAICompatible
+    @State private var displayName = ""
+    @State private var endpointURL = ""
+    @State private var modelID = ""
+    @State private var apiKey = ""
+    @State private var isEnabled = true
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text(engine == nil ? "添加翻译引擎" : "编辑翻译引擎")
+                .font(.headline).padding()
+            Divider()
+
+            Form {
+                Picker("引擎类型", selection: $selectedType) {
+                    ForEach(EngineType.allCases) { Text($0.displayName).tag($0) }
+                }
+                .onChange(of: selectedType) { _, t in
+                    if displayName.isEmpty { displayName = t.displayName }
+                    // 切换类型时自动填充该服务商的常用默认值
+                    switch t {
+                    case .openAICompatible:
+                        if endpointURL.isEmpty { endpointURL = "https://api.openai.com/v1" }
+                        if modelID.isEmpty { modelID = "gpt-4o-mini" }
+                    case .anthropic:
+                        if modelID.isEmpty { modelID = "claude-haiku-4-5-20251001" }
+                    case .gemini:
+                        if modelID.isEmpty { modelID = "gemini-1.5-flash" }
+                    case .ollama:
+                        if endpointURL.isEmpty { endpointURL = "http://localhost:11434" }
+                        if modelID.isEmpty { modelID = "llama3" }
+                    case .apple, .deepL:
+                        break
+                    }
+                }
+
+                TextField("显示名称", text: $displayName)
+
+                if selectedType.requiresEndpoint {
+                    TextField(selectedType == .ollama ? "Endpoint (默认: http://localhost:11434)" : "Endpoint URL",
+                              text: $endpointURL)
+                }
+
+                if selectedType.requiresModelID {
+                    TextField("Model ID", text: $modelID).help(modelIDHint)
+                }
+
+                if selectedType.requiresAPIKey {
+                    SecureField("API Key", text: $apiKey)
+                    Text("API Key 将安全存储在系统 Keychain 中")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+
+                if selectedType == .apple {
+                    AppleLanguagePackSection()
+                }
+
+                Toggle("启用此引擎", isOn: $isEnabled)
+            }
+            .formStyle(.grouped)
+
+            Divider()
+            HStack {
+                Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)
+                Spacer()
+                Button("保存") { save() }.keyboardShortcut(.defaultAction).disabled(displayName.isEmpty)
+            }
+            .padding()
+        }
+        .frame(width: 460, height: 380)
+        .onAppear { loadExisting() }
+    }
+
+    private var modelIDHint: String {
+        switch selectedType {
+        case .openAICompatible: return "如: gpt-4o-mini, gpt-4o"
+        case .anthropic: return "如: claude-haiku-4-5-20251001, claude-sonnet-4-6"
+        case .gemini: return "如: gemini-1.5-flash, gemini-1.5-pro"
+        case .ollama: return "如: llama3, mistral, qwen2"
+        default: return ""
+        }
+    }
+
+    private func loadExisting() {
+        guard let engine else { return }
+        selectedType = engine.engineType
+        displayName = engine.displayName
+        endpointURL = engine.endpointURL ?? ""
+        modelID = engine.modelID ?? ""
+        isEnabled = engine.isEnabled
+        apiKey = (try? KeychainHelper.load(key: engine.id.uuidString)) ?? ""
+    }
+
+    private func save() {
+        let config: EngineConfig
+        if let existing = engine {
+            existing.displayName = displayName
+            existing.engineType = selectedType
+            existing.endpointURL = endpointURL.isEmpty ? nil : endpointURL
+            existing.modelID = modelID.isEmpty ? nil : modelID
+            existing.isEnabled = isEnabled
+            config = existing
+        } else {
+            config = EngineConfig(
+                displayName: displayName,
+                engineType: selectedType,
+                endpointURL: endpointURL.isEmpty ? nil : endpointURL,
+                modelID: modelID.isEmpty ? nil : modelID,
+                isEnabled: isEnabled
+            )
+        }
+        if selectedType.requiresAPIKey && !apiKey.isEmpty {
+            try? KeychainHelper.save(key: config.id.uuidString, value: apiKey)
+        }
+        onSave(config)
+        dismiss()
+    }
+}
+
+// MARK: - Apple 翻译语言包准备
+struct AppleLanguagePackSection: View {
+    @State private var sourceLang = "en"
+    @State private var targetLang = "zh-Hans"
+    @State private var status: String?
+    @State private var isPreparing = false
+
+    private let langs: [(String, String)] = [
+        ("en", "英语"), ("zh-Hans", "简体中文"), ("zh-Hant", "繁体中文"),
+        ("ja", "日语"), ("ko", "韩语"), ("fr", "法语"), ("de", "德语"),
+        ("es", "西班牙语"), ("ru", "俄语"), ("it", "意大利语"), ("pt", "葡萄牙语")
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("语言包").font(.callout).bold()
+            Text("Apple 翻译需要先下载对应语言包才能离线使用。点击下载将弹出系统对话框确认。")
+                .font(.caption).foregroundStyle(.secondary)
+
+            HStack {
+                Picker("从", selection: $sourceLang) {
+                    ForEach(langs, id: \.0) { Text($0.1).tag($0.0) }
+                }
+                Picker("到", selection: $targetLang) {
+                    ForEach(langs, id: \.0) { Text($0.1).tag($0.0) }
+                }
+            }
+
+            HStack {
+                Button {
+                    prepare()
+                } label: {
+                    if isPreparing {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .controlSize(.small)
+                    } else {
+                        Text("下载/检查语言包")
+                    }
+                }
+                .disabled(isPreparing)
+
+                if let status {
+                    Text(status).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func prepare() {
+        guard #available(macOS 15, *) else {
+            status = "需要 macOS 15 或更新"
+            return
+        }
+        isPreparing = true
+        status = "准备中..."
+        Task {
+            do {
+                try await AppleTranslationBridge.shared.prepareLanguagePack(from: sourceLang, to: targetLang)
+                status = "✅ 语言包就绪"
+            } catch {
+                status = "❌ \(error.localizedDescription)"
+            }
+            isPreparing = false
+        }
+    }
+}

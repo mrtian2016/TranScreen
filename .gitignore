@@ -1,0 +1,8 @@
+*
+!TranScreen.xcodeproj
+!TranScreen.xcodeproj/**
+!TranScreen
+!TranScreen/**
+!.gitignore
+TranScreen.xcodeproj/xcuserdata/
+TranScreen.xcodeproj/project.xcworkspace/xcuserdata/

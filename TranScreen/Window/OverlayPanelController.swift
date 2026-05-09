@@ -27,7 +27,7 @@ final class OverlayPanelController {
 
     func showForTranslation(region: CGRect) {
         panel.orderFront(nil)
-        panel.disableMouseEvents()
+        // Keep mouse events enabled so toolbar buttons are clickable
     }
 
     func showFullScreenMask() {

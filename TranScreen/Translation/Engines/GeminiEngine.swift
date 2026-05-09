@@ -4,11 +4,16 @@ struct GeminiEngine: TranslationEngine {
     let engineType = EngineType.gemini
     let configID: UUID
     let modelID: String
+    let temperature: Double
+    let systemPrompt: String
+    let customPrompt: String
 
     init(config: EngineConfig) throws {
         self.configID = config.id
         self.modelID = config.modelID ?? "gemini-1.5-flash"
-        // API Key 改为按需加载
+        self.temperature = config.temperature
+        self.systemPrompt = config.systemPrompt
+        self.customPrompt = config.customPrompt
     }
 
     private func loadAPIKey() throws -> String {
@@ -18,17 +23,26 @@ struct GeminiEngine: TranslationEngine {
         return key
     }
 
+    private func buildSystemPrompt(from sourceLang: String, to targetLang: String) -> String {
+        var parts = [systemPrompt]
+        parts.append("Translate from \(sourceLang) to \(targetLang). Return ONLY numbered translations.")
+        if !customPrompt.isEmpty {
+            parts.append(customPrompt)
+        }
+        return parts.joined(separator: "\n\n")
+    }
+
     func translate(texts: [String], from sourceLang: String, to targetLang: String) async throws -> [String] {
         let apiKey = try loadAPIKey()
         let urlString = "https://generativelanguage.googleapis.com/v1beta/models/\(modelID):generateContent?key=\(apiKey)"
         guard let url = URL(string: urlString) else { throw TranslationError.invalidEndpoint }
 
         let numbered = texts.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
-        let prompt = "Translate from \(sourceLang) to \(targetLang). Return ONLY numbered translations:\n\(numbered)"
+        let fullPrompt = "\(buildSystemPrompt(from: sourceLang, to: targetLang))\n\n\(numbered)"
 
         let body: [String: Any] = [
-            "contents": [["parts": [["text": prompt]]]],
-            "generationConfig": ["temperature": 0.1, "maxOutputTokens": 2048]
+            "contents": [["parts": [["text": fullPrompt]]]],
+            "generationConfig": ["temperature": temperature, "maxOutputTokens": 2048]
         ]
 
         var request = URLRequest(url: url)

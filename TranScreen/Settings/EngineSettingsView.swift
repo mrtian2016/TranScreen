@@ -167,6 +167,9 @@ struct EngineEditSheet: View {
     @State private var modelID = ""
     @State private var apiKey = ""
     @State private var isEnabled = true
+    @State private var temperature: Double = 0.3
+    @State private var systemPrompt: String = "你是一个有用的翻译助手"
+    @State private var customPrompt: String = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -214,6 +217,30 @@ struct EngineEditSheet: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
+                if selectedType.supportsTemperature {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Temperature: \(temperature, specifier: "%.2f")")
+                            .font(.callout)
+                        Slider(value: $temperature, in: 0...2.0, step: 0.05)
+                        Text("越低越稳定，越高越有创造性")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+
+                if selectedType.supportsCustomPrompt {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("系统提示词").font(.callout).bold()
+                        TextField("初始化系统提示词", text: $systemPrompt)
+                            .help("发送给模型的系统级指令，定义翻译助手的基本行为")
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("自定义提示词").font(.callout).bold()
+                        TextField("翻译风格、术语偏好等额外指令", text: $customPrompt)
+                            .help("额外附加到系统提示词的用户自定义指令")
+                    }
+                }
+
                 if selectedType == .apple {
                     AppleLanguagePackSection()
                 }
@@ -230,7 +257,7 @@ struct EngineEditSheet: View {
             }
             .padding()
         }
-        .frame(width: 460, height: 380)
+        .frame(width: 480, height: 560)
         .onAppear { loadExisting() }
     }
 
@@ -251,6 +278,9 @@ struct EngineEditSheet: View {
         endpointURL = engine.endpointURL ?? ""
         modelID = engine.modelID ?? ""
         isEnabled = engine.isEnabled
+        temperature = engine.temperature
+        systemPrompt = engine.systemPrompt
+        customPrompt = engine.customPrompt
         apiKey = (try? KeychainHelper.load(key: engine.id.uuidString)) ?? ""
     }
 
@@ -262,6 +292,9 @@ struct EngineEditSheet: View {
             existing.endpointURL = endpointURL.isEmpty ? nil : endpointURL
             existing.modelID = modelID.isEmpty ? nil : modelID
             existing.isEnabled = isEnabled
+            existing.temperature = temperature
+            existing.systemPrompt = systemPrompt
+            existing.customPrompt = customPrompt
             config = existing
         } else {
             config = EngineConfig(
@@ -269,7 +302,10 @@ struct EngineEditSheet: View {
                 engineType: selectedType,
                 endpointURL: endpointURL.isEmpty ? nil : endpointURL,
                 modelID: modelID.isEmpty ? nil : modelID,
-                isEnabled: isEnabled
+                isEnabled: isEnabled,
+                temperature: temperature,
+                systemPrompt: systemPrompt,
+                customPrompt: customPrompt
             )
         }
         if selectedType.requiresAPIKey && !apiKey.isEmpty {

@@ -42,6 +42,17 @@ enum EngineType: String, Codable, CaseIterable, Identifiable {
         default: return false
         }
     }
+
+    var supportsTemperature: Bool {
+        switch self {
+        case .openAICompatible, .anthropic, .gemini, .ollama: return true
+        default: return false
+        }
+    }
+
+    var supportsCustomPrompt: Bool {
+        supportsTemperature
+    }
 }
 
 @Model
@@ -54,6 +65,9 @@ final class EngineConfig {
     var isEnabled: Bool
     var sortOrder: Int
     var createdAt: Date
+    var temperature: Double = 0.3
+    var systemPrompt: String = "你是一个有用的翻译助手"
+    var customPrompt: String = ""
 
     var engineType: EngineType {
         get { EngineType(rawValue: engineTypeRaw) ?? .openAICompatible }
@@ -66,7 +80,10 @@ final class EngineConfig {
         endpointURL: String? = nil,
         modelID: String? = nil,
         isEnabled: Bool = true,
-        sortOrder: Int = 0
+        sortOrder: Int = 0,
+        temperature: Double = 0.3,
+        systemPrompt: String = "你是一个有用的翻译助手",
+        customPrompt: String = ""
     ) {
         self.id = UUID()
         self.displayName = displayName
@@ -76,5 +93,8 @@ final class EngineConfig {
         self.isEnabled = isEnabled
         self.sortOrder = sortOrder
         self.createdAt = Date()
+        self.temperature = temperature
+        self.systemPrompt = systemPrompt
+        self.customPrompt = customPrompt
     }
 }

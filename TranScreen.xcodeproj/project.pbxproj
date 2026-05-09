@@ -48,6 +48,10 @@
 		DB7F643BC9B7B7431AA2C6FD = {isa = PBXBuildFile; fileRef = 50461D7F70A10BFE338DDBA5; };
 		430D468460B87CF27B6F35B5 = {isa = PBXBuildFile; fileRef = 7845E3AF486672882B517084; };
 		8CEA6A1CCCA41416CE85797C = {isa = PBXBuildFile; fileRef = CA9925C2C316FF98D10D2374; };
+			F1E2D3C4B5A6789012345678 = {isa = PBXBuildFile; fileRef = E5A4B3C2D1F0987654321ABC; };
+			102FAEB3267645C99A5BB011 = {isa = PBXBuildFile; fileRef = AA1D27B968C24F5C9A0C0382; };
+			928056974AC14B379B33BA5D = {isa = PBXBuildFile; fileRef = 027A1C9F1DC24CBE839DA046; };
+			999F4FE17BFE4AFD9F1CCEA3 = {isa = PBXBuildFile; fileRef = C9705F858B5948F6B99F1A3A; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -93,6 +97,10 @@
 		7845E3AF486672882B517084 = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		CA9925C2C316FF98D10D2374 = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
 		ED160D86F4F59187308C3B77 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TranScreen.app; sourceTree = BUILT_PRODUCTS_DIR; };
+			E5A4B3C2D1F0987654321ABC = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BackgroundSampler.swift; path = BackgroundSampler.swift; sourceTree = "<group>"; };
+			AA1D27B968C24F5C9A0C0382 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TranslationToolbarView.swift; path = TranslationToolbarView.swift; sourceTree = "<group>"; };
+			027A1C9F1DC24CBE839DA046 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RegionSegmenter.swift; path = RegionSegmenter.swift; sourceTree = "<group>"; };
+			C9705F858B5948F6B99F1A3A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = EdgeDetector.swift; path = EdgeDetector.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -175,6 +183,7 @@
 			children = (
 				6F3914BB5B666F6630A61E1D,
 				0BEE1720F011E1501A992218,
+					E5A4B3C2D1F0987654321ABC,
 			);
 			name = Capture;
 			path = Capture;
@@ -186,6 +195,8 @@
 				4F7659998CE5C1E88E5FA9B0,
 				B916CEC82DB0BAF63EAF82E3,
 				79000C5525A08F7DE3E4C998,
+				027A1C9F1DC24CBE839DA046,
+				C9705F858B5948F6B99F1A3A,
 			);
 			name = OCR;
 			path = OCR;
@@ -196,6 +207,7 @@
 			children = (
 				ABCF8DEBCB44CC09B31D2705,
 				BFCD02F401AF1F17D05A00B7,
+				AA1D27B968C24F5C9A0C0382,
 			);
 			name = Overlay;
 			path = Overlay;
@@ -385,6 +397,10 @@
 				0CD9B0D3C8C62084034178E5,
 				29F2EA61697048D878233B9C,
 				DF13D4210DE021B9C7C5012C,
+				F1E2D3C4B5A6789012345678,
+				102FAEB3267645C99A5BB011,
+				928056974AC14B379B33BA5D,
+				999F4FE17BFE4AFD9F1CCEA3,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

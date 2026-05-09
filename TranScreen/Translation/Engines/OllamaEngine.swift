@@ -5,11 +5,26 @@ struct OllamaEngine: TranslationEngine {
     let configID: UUID
     let endpoint: String
     let modelID: String
+    let temperature: Double
+    let systemPrompt: String
+    let customPrompt: String
 
     init(config: EngineConfig) throws {
         self.configID = config.id
         self.endpoint = config.endpointURL ?? "http://localhost:11434"
         self.modelID = config.modelID ?? "llama3"
+        self.temperature = config.temperature
+        self.systemPrompt = config.systemPrompt
+        self.customPrompt = config.customPrompt
+    }
+
+    private func buildSystemPrompt(from sourceLang: String, to targetLang: String) -> String {
+        var parts = [systemPrompt]
+        parts.append("Translate from \(sourceLang) to \(targetLang). Return ONLY numbered translations.")
+        if !customPrompt.isEmpty {
+            parts.append(customPrompt)
+        }
+        return parts.joined(separator: "\n\n")
     }
 
     func translate(texts: [String], from sourceLang: String, to targetLang: String) async throws -> [String] {
@@ -17,10 +32,11 @@ struct OllamaEngine: TranslationEngine {
         let body: [String: Any] = [
             "model": modelID,
             "messages": [
-                ["role": "system", "content": "Translate from \(sourceLang) to \(targetLang). Return ONLY numbered translations."],
+                ["role": "system", "content": buildSystemPrompt(from: sourceLang, to: targetLang)],
                 ["role": "user", "content": numbered]
             ],
-            "stream": false
+            "stream": false,
+            "options": ["temperature": temperature]
         ]
 
         guard let url = URL(string: "\(endpoint)/api/chat") else { throw TranslationError.invalidEndpoint }

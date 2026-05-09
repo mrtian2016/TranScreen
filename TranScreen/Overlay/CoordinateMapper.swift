@@ -44,8 +44,14 @@ struct CoordinateMapper {
         return CGRect(x: screenX, y: swiftuiY, width: pointW, height: pointH)
     }
 
-    func adaptiveFontSize(for rect: CGRect, text: String) -> CGFloat {
-        let estimated = rect.height * 0.75
-        return max(9, min(36, estimated))
+    /// Calculate adaptive font size from per-line OCR bounding boxes (Vision normalized).
+    /// Each observation is one line of text. Uses median (P50) of line heights so two
+    /// blocks with the same actual font size — even if they have different line counts —
+    /// resolve to the same font size, while title vs body still come out distinct.
+    func adaptiveFontSize(forLineBoxes boxes: [CGRect]) -> CGFloat {
+        guard !boxes.isEmpty else { return 14 }
+        let heights = boxes.map { mapToSwiftUI(visionBox: $0).height }.sorted()
+        let median = heights[heights.count / 2]
+        return max(9, min(48, median * 0.85))
     }
 }

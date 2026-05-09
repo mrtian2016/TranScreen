@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 struct OverlayRootView: View {
     @EnvironmentObject var appState: AppState
@@ -28,10 +29,19 @@ struct OverlayRootView: View {
                         .font(.caption).foregroundStyle(.white.opacity(0.7))
                 }
 
-            case .regionTranslating:
+            case .regionTranslating(let region):
+                // Tap-anywhere-to-dismiss layer — sits below dim/labels, above
+                // nothing. SwiftUI delivers gestures to the topmost child first,
+                // so toolbar buttons (added later in this ZStack) win their hits.
+                Color.black.opacity(0.001)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { appState.exitToIdle() }
+
                 TranslationOverlayView(
                     blocks: appState.translatedBlocks,
                     opacity: appState.overlayOpacity,
+                    showingOriginal: appState.showingOriginal,
                     debugCapturedSize: appState.debugCapturedSize,
                     debugOCRCount: appState.debugOCRCount
                 )
@@ -40,11 +50,21 @@ struct OverlayRootView: View {
                         .progressViewStyle(.circular)
                         .controlSize(.large)
                 }
+                if !appState.translatedBlocks.isEmpty && !appState.isProcessing {
+                    TranslationToolbar(
+                        showingOriginal: $appState.showingOriginal,
+                        region: region,
+                        onCopy: { appState.copyDisplayedText() },
+                        onSaveImage: { appState.saveScreenshot(of: region) },
+                        onDismiss: { appState.exitToIdle() }
+                    )
+                }
 
             case .fullScreenMask:
                 TranslationOverlayView(
                     blocks: appState.translatedBlocks,
                     opacity: appState.overlayOpacity,
+                    showingOriginal: appState.showingOriginal,
                     debugCapturedSize: appState.debugCapturedSize,
                     debugOCRCount: appState.debugOCRCount
                 )

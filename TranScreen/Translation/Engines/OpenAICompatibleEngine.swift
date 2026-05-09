@@ -5,6 +5,9 @@ struct OpenAICompatibleEngine: TranslationEngine {
     let configID: UUID
     let endpoint: String
     let modelID: String
+    let temperature: Double
+    let systemPrompt: String
+    let customPrompt: String
 
     init(config: EngineConfig) throws {
         self.configID = config.id
@@ -13,11 +16,22 @@ struct OpenAICompatibleEngine: TranslationEngine {
         }
         self.endpoint = ep
         self.modelID = config.modelID ?? "gpt-4o-mini"
-        // API Key 改为按需加载，避免 App 启动时触发 Keychain 授权弹窗
+        self.temperature = config.temperature
+        self.systemPrompt = config.systemPrompt
+        self.customPrompt = config.customPrompt
     }
 
     private func loadAPIKey() -> String {
         (try? KeychainHelper.load(key: configID.uuidString)) ?? ""
+    }
+
+    private func buildSystemPrompt(from sourceLang: String, to targetLang: String) -> String {
+        var parts = [systemPrompt]
+        parts.append("Translate the following numbered texts from \(sourceLang) to \(targetLang). Return ONLY the translated texts in the same numbered format.")
+        if !customPrompt.isEmpty {
+            parts.append(customPrompt)
+        }
+        return parts.joined(separator: "\n\n")
     }
 
     func translate(texts: [String], from sourceLang: String, to targetLang: String) async throws -> [String] {
@@ -26,10 +40,10 @@ struct OpenAICompatibleEngine: TranslationEngine {
         let body: [String: Any] = [
             "model": modelID,
             "messages": [
-                ["role": "system", "content": "You are a professional translator. Translate the following numbered texts from \(sourceLang) to \(targetLang). Return ONLY the translated texts in the same numbered format."],
+                ["role": "system", "content": buildSystemPrompt(from: sourceLang, to: targetLang)],
                 ["role": "user", "content": numbered]
             ],
-            "temperature": 0.1,
+            "temperature": temperature,
             "max_tokens": 2048
         ]
         let responseText = try await postJSON(to: "\(endpoint)/chat/completions", body: body, apiKey: apiKey)

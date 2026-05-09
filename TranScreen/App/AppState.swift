@@ -23,6 +23,8 @@ final class AppState: ObservableObject {
     @Published var hasAccessibilityPermission = false
     @Published var isProcessing = false
     @Published var lastError: String?
+    @Published var showingOriginal = false
+    @Published var selectedRegion: CGRect = .zero
 
     // 调试信息
     @Published var debugCapturedSize: CGSize = .zero
@@ -39,6 +41,10 @@ final class AppState: ObservableObject {
 
     private var fullScreenTask: Task<Void, Never>?
     private let diffDetector = DiffDetector()
+
+    /// Holds the clean original capture so the screenshot button saves the
+    /// pre-overlay image (no dimming, no translation labels). Cleared on idle.
+    private var lastCapturedImage: CGImage?
 
     var settings: AppSettings?
 
@@ -80,6 +86,7 @@ final class AppState: ObservableObject {
         case .idle:
             panel.hide()
             translatedBlocks = []
+            lastCapturedImage = nil
             isProcessing = false
             lastError = nil
 
@@ -122,7 +129,45 @@ final class AppState: ObservableObject {
     }
 
     func handleRegionSelected(_ rect: CGRect) {
+        selectedRegion = rect
+        showingOriginal = false
         mode = .regionTranslating(rect)
+    }
+
+    func copyDisplayedText() {
+        let text = translatedBlocks.map {
+            showingOriginal ? $0.originalText : ($0.translatedText.isEmpty ? $0.originalText : $0.translatedText)
+        }.joined(separator: "\n")
+        guard !text.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    func saveScreenshot(of region: CGRect) {
+        guard let cgImage = lastCapturedImage else {
+            lastError = "无可保存的截图"
+            return
+        }
+        // LSUIElement apps with .nonactivatingPanel must explicitly activate
+        // before NSSavePanel will appear in front of the user.
+        NSApp.activate(ignoringOtherApps: true)
+        Task { @MainActor in
+            let panel = NSSavePanel()
+            panel.allowedContentTypes = [.png]
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyyMMdd_HHmmss"
+            panel.nameFieldStringValue = "TranScreen_\(formatter.string(from: Date())).png"
+            let response: NSApplication.ModalResponse = await withCheckedContinuation { cont in
+                panel.begin { cont.resume(returning: $0) }
+            }
+            guard response == .OK, let url = panel.url else { return }
+            guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
+                self.lastError = "无法创建图片输出"
+                return
+            }
+            CGImageDestinationAddImage(dest, cgImage, nil)
+            CGImageDestinationFinalize(dest)
+        }
     }
 
     // MARK: - 核心 Pipeline：选区截图翻译
@@ -134,6 +179,7 @@ final class AppState: ObservableObject {
                 let image = try await screenCapture.captureRegion(region)
                 let imageSize = CGSize(width: image.width, height: image.height)
                 self.debugCapturedSize = imageSize
+                self.lastCapturedImage = image
 
                 guard image.width > 10, image.height > 10 else {
                     self.lastError = "选区太小（\(image.width)×\(image.height)px），无法识别"
@@ -151,33 +197,58 @@ final class AppState: ObservableObject {
                 }
 
                 let textBlocks = ocrResults.map { TextBlock(from: $0) }
-                let mergedBlocks = textMerger.merge(blocks: textBlocks)
                 let mapper = CoordinateMapper(captureRegion: region, imageSize: imageSize)
+                let edgeDetector = EdgeDetector()
+                let segmenter = RegionSegmenter()
 
-                // 先把 OCR 结果作为兜底渲染（即使翻译失败也至少能看到原文）
-                let fallback = mergedBlocks.map { mb -> TranslatedBlock in
-                    var b = TranslatedBlock(
-                        originalText: mb.text,
-                        translatedText: "",
-                        visionBoundingBox: mb.boundingBox,
-                        isVertical: mb.isVertical
-                    )
-                    b.captureRegion = region
-                    b.screenRect = mapper.mapToSwiftUI(visionBox: b.visionBoundingBox)
-                    b.fontSize = mapper.adaptiveFontSize(for: b.screenRect, text: b.originalText)
-                    return b
+                // RegionSegmenter is still used for paragraph gap splitting (so each
+                // visual paragraph translates independently), but we no longer use
+                // its representativeHeight — font size is per-block median to avoid
+                // collapsing title + body into one shared size when the cluster
+                // detector merges them.
+                let regions = segmenter.segment(blocks: textBlocks)
+
+                var allMerged: [MergedTextBlock] = []
+                var blockEdges: [UUID: LineGeometry] = [:]
+
+                for textRegion in regions {
+                    let merged = textMerger.merge(blocks: textRegion.blocks)
+                    let edges = edgeDetector.detectLineEdges(blocks: textRegion.blocks)
+                    for mb in merged {
+                        if let e = edges { blockEdges[mb.id] = e }
+                    }
+                    allMerged.append(contentsOf: merged)
                 }
-                self.translatedBlocks = fallback
 
-                // 把 "auto" 解析为实际语言（Apple Translation 不接受 nil 自动检测）
+                guard !allMerged.isEmpty else {
+                    self.lastError = "未识别到文字"
+                    self.isProcessing = false
+                    return
+                }
+
+                // Per-block bg color sampled now (used in the per-block fill).
+                var blockBg: [UUID: (Double, Double, Double)] = [:]
+                for mb in allMerged {
+                    blockBg[mb.id] = BackgroundSampler.sampleBackgroundColor(image: image, normalizedBox: mb.boundingBox)
+                }
+
+                // Resolve source language
                 let resolvedSource = (sourceLang == "auto")
-                    ? Self.detectLanguage(from: mergedBlocks.map(\.text))
+                    ? Self.detectLanguage(from: allMerged.map(\.text))
                     : sourceLang
 
-                // 再尝试翻译
+                // Lookup by text — translation API returns blocks in input order but
+                // we want O(1) lookup against the original metadata.
+                var metaByText: [String: (edges: LineGeometry?, lineBoxes: [CGRect], bg: (Double, Double, Double))] = [:]
+                for mb in allMerged {
+                    let bg = blockBg[mb.id] ?? (1, 1, 1)
+                    metaByText[mb.text] = (blockEdges[mb.id], mb.lines.map(\.boundingBox), bg)
+                }
+
+                // Translate all blocks
                 do {
                     let translated = try await translationManager.translate(
-                        blocks: mergedBlocks,
+                        blocks: allMerged,
                         from: resolvedSource,
                         to: targetLang
                     )
@@ -185,13 +256,54 @@ final class AppState: ObservableObject {
                         var b = block
                         b.captureRegion = region
                         b.screenRect = mapper.mapToSwiftUI(visionBox: b.visionBoundingBox)
-                        b.fontSize = mapper.adaptiveFontSize(for: b.screenRect, text: b.translatedText)
+
+                        let meta = metaByText[block.originalText]
+
+                        // Font size from this block's own median line height — stable
+                        // across paragraphs of the same actual size, but title and
+                        // body get distinct sizes because their line heights differ.
+                        let lineBoxes = meta?.lineBoxes ?? [b.visionBoundingBox]
+                        b.fontSize = mapper.adaptiveFontSize(forLineBoxes: lineBoxes)
+
+                        // Background color (already sampled above)
+                        let bg = meta?.bg ?? (1, 1, 1)
+                        b.bgRed = bg.0; b.bgGreen = bg.1; b.bgBlue = bg.2
+
+                        // Text color — sample per OCR line, then dominant across lines.
+                        // Pass the just-computed bg as reference so we filter "pixels
+                        // different from background" rather than "pixels different from
+                        // box mean luminance" (the latter mis-labels the abundant white
+                        // pixels of a white-on-black/black-on-white line as text).
+                        let (tr, tg, tb) = BackgroundSampler.sampleTextColor(
+                            image: image,
+                            normalizedBoxes: lineBoxes,
+                            background: bg
+                        )
+                        b.textR = tr; b.textG = tg; b.textB = tb
+
+                        // Line edges for indentation awareness
+                        if let edges = meta?.edges {
+                            b.lineEdges = (left: edges.leftEdge, right: edges.rightEdge)
+                        }
                         return b
                     }
                     self.translatedBlocks = rendered
                     self.isProcessing = false
                 } catch {
-                    // 翻译失败但保留 OCR 结果显示
+                    let fallback = allMerged.map { mb -> TranslatedBlock in
+                        var b = TranslatedBlock(
+                            originalText: mb.text,
+                            translatedText: "",
+                            visionBoundingBox: mb.boundingBox,
+                            isVertical: mb.isVertical
+                        )
+                        b.captureRegion = region
+                        b.screenRect = mapper.mapToSwiftUI(visionBox: b.visionBoundingBox)
+                        let bg = blockBg[mb.id] ?? (1, 1, 1)
+                        b.bgRed = bg.0; b.bgGreen = bg.1; b.bgBlue = bg.2
+                        return b
+                    }
+                    self.translatedBlocks = fallback
                     self.lastError = "翻译失败: \(error.localizedDescription)"
                     self.isProcessing = false
                 }
@@ -199,7 +311,6 @@ final class AppState: ObservableObject {
             } catch {
                 self.lastError = error.localizedDescription
                 self.isProcessing = false
-                // 截图/OCR 失败才回到 idle
                 self.mode = .idle
             }
         }
@@ -245,11 +356,18 @@ final class AppState: ObservableObject {
             let imageSize = CGSize(width: image.width, height: image.height)
             let mapper = CoordinateMapper(captureRegion: screenFrame, imageSize: imageSize)
 
+            let lineBoxesByText: [String: [CGRect]] = Dictionary(
+                uniqueKeysWithValues: mergedBlocks.map { ($0.text, $0.lines.map(\.boundingBox)) }
+            )
+
             let rendered = translated.map { block -> TranslatedBlock in
                 var b = block
                 b.captureRegion = screenFrame
                 b.screenRect = mapper.mapToSwiftUI(visionBox: b.visionBoundingBox)
-                b.fontSize = mapper.adaptiveFontSize(for: b.screenRect, text: b.translatedText)
+                let lineBoxes = lineBoxesByText[block.originalText] ?? [block.visionBoundingBox]
+                b.fontSize = mapper.adaptiveFontSize(forLineBoxes: lineBoxes)
+                let (r, g, bl) = BackgroundSampler.sampleBackgroundColor(image: image, normalizedBox: b.visionBoundingBox)
+                b.bgRed = r; b.bgGreen = g; b.bgBlue = bl
                 return b
             }
 

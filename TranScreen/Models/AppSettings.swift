@@ -12,6 +12,15 @@ final class AppSettings {
     var textColorHex: String
     var fontSizeMode: String
     var fixedFontSize: Double
+    var selectionBorderColorHex: String = "#000000"
+    var selectionBorderStyle: String = "corners"
+    var selectionBorderLineWidth: Double = 1.4
+    var regionToolbarOpacity: Double = 0.9
+    var realtimeToolbarOpacity: Double = 0.5
+    var realtimeBadgeColorHex: String = "#111111"
+    var realtimeBadgeTextColorHex: String = "#FFFFFF"
+    var realtimeBadgeOpacity: Double = 0.8
+    var realtimeBadgeFontSize: Double = 11.0
 
     init() {
         self.sourceLang = "auto"
@@ -23,5 +32,14 @@ final class AppSettings {
         self.textColorHex = "#FFFFFF"
         self.fontSizeMode = "adaptive"
         self.fixedFontSize = 14.0
+        self.selectionBorderColorHex = "#000000"
+        self.selectionBorderStyle = "corners"
+        self.selectionBorderLineWidth = 1.4
+        self.regionToolbarOpacity = 0.9
+        self.realtimeToolbarOpacity = 0.5
+        self.realtimeBadgeColorHex = "#111111"
+        self.realtimeBadgeTextColorHex = "#FFFFFF"
+        self.realtimeBadgeOpacity = 0.8
+        self.realtimeBadgeFontSize = 11.0
     }
 }

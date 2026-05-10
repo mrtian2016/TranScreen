@@ -5,6 +5,7 @@ import Carbon
 struct HotkeyRecorder: NSViewRepresentable {
     @Binding var spec: HotkeySpec
     @Binding var isRecording: Bool
+    var onCancelled: () -> Void = {}
 
     func makeNSView(context: Context) -> HotkeyRecorderView {
         let view = HotkeyRecorderView()
@@ -14,6 +15,7 @@ struct HotkeyRecorder: NSViewRepresentable {
         }
         view.onCancelled = {
             isRecording = false
+            onCancelled()
         }
         return view
     }
@@ -26,10 +28,19 @@ struct HotkeyRecorder: NSViewRepresentable {
 }
 
 final class HotkeyRecorderView: NSView {
+    private var localKeyMonitor: Any?
+
     var isRecording = false {
         didSet {
             needsDisplay = true
-            if isRecording { window?.makeFirstResponder(self) }
+            if isRecording {
+                installLocalKeyMonitor()
+                DispatchQueue.main.async { [weak self] in
+                    self?.window?.makeFirstResponder(self)
+                }
+            } else {
+                removeLocalKeyMonitor()
+            }
         }
     }
     var currentSpec = HotkeySpec(keyCode: -1, modifiers: [])
@@ -37,6 +48,10 @@ final class HotkeyRecorderView: NSView {
     var onCancelled: (() -> Void)?
 
     override var acceptsFirstResponder: Bool { true }
+
+    deinit {
+        removeLocalKeyMonitor()
+    }
 
     override func draw(_ dirtyRect: NSRect) {
         let text = isRecording ? "按下快捷键..." : currentSpec.displayString
@@ -66,6 +81,16 @@ final class HotkeyRecorderView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
+        recordKeyEvent(event)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard isRecording, event.type == .keyDown else { return false }
+        recordKeyEvent(event)
+        return true
+    }
+
+    private func recordKeyEvent(_ event: NSEvent) {
         guard isRecording else { return }
 
         let keyCode = Int(event.keyCode)
@@ -85,6 +110,22 @@ final class HotkeyRecorderView: NSView {
             [.maskCommand, .maskShift, .maskAlternate, .maskControl]
         )
         onSpecRecorded?(HotkeySpec(keyCode: keyCode, modifiers: flags))
+    }
+
+    private func installLocalKeyMonitor() {
+        removeLocalKeyMonitor()
+        localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, self.isRecording else { return event }
+            self.recordKeyEvent(event)
+            return nil
+        }
+    }
+
+    private func removeLocalKeyMonitor() {
+        if let localKeyMonitor {
+            NSEvent.removeMonitor(localKeyMonitor)
+            self.localKeyMonitor = nil
+        }
     }
 }
 

@@ -17,7 +17,8 @@ final class HotkeyManager {
         var newMap: [HotkeySpec: HotkeyAction] = [:]
         for binding in hotkeyBindings where binding.isEnabled {
             if let action = binding.action {
-                newMap[binding.spec] = action
+                let spec = binding.spec.isValid ? binding.spec : action.defaultBinding
+                newMap[spec] = action
             }
         }
 
@@ -38,7 +39,19 @@ final class HotkeyManager {
             return
         }
 
-        let mask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
+        let eventTypes: [CGEventType] = [
+            .keyDown,
+            .scrollWheel,
+            .leftMouseDown,
+            .leftMouseUp,
+            .rightMouseDown,
+            .rightMouseUp,
+            .otherMouseDown,
+            .otherMouseUp
+        ]
+        let mask = eventTypes.reduce(CGEventMask(0)) { partial, eventType in
+            partial | (CGEventMask(1) << eventType.rawValue)
+        }
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
 
         eventTap = CGEvent.tapCreate(
@@ -77,6 +90,20 @@ final class HotkeyManager {
     }
 
     private func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        if type == .scrollWheel ||
+            type == .leftMouseDown || type == .leftMouseUp ||
+            type == .rightMouseDown || type == .rightMouseUp ||
+            type == .otherMouseDown || type == .otherMouseUp {
+            let location = event.location
+            DispatchQueue.main.async { [weak self] in
+                guard let appState = self?.appState else { return }
+                if !appState.realtimeToolbarContainsEventLocation(location) {
+                    appState.noteRealtimeUserActivity()
+                }
+            }
+            return Unmanaged.passUnretained(event)
+        }
+
         guard type == .keyDown else { return Unmanaged.passUnretained(event) }
 
         let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
@@ -84,6 +111,9 @@ final class HotkeyManager {
         let spec = HotkeySpec(keyCode: keyCode, modifiers: flags)
 
         guard let action = bindings[spec] else {
+            DispatchQueue.main.async { [weak self] in
+                self?.appState?.noteRealtimeUserActivity()
+            }
             return Unmanaged.passUnretained(event)
         }
 
@@ -101,11 +131,9 @@ final class HotkeyManager {
         case .triggerRegionSelect:
             appState.enterRegionSelect()
         case .toggleFullScreenMask:
-            appState.toggleFullScreenMask()
+            appState.enterRealtimeSelect()
         case .fullScreenRegionSelect:
-            if appState.mode == .fullScreenMask {
-                appState.mode = .fullScreenRegionSelecting
-            }
+            appState.enterRealtimeSelect()
         case .exitToIdle:
             appState.exitToIdle()
         case .increaseOpacity:

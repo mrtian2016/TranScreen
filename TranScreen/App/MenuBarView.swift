@@ -16,8 +16,8 @@ struct MenuBarView: View {
 
         Button("选区翻译") { appState.enterRegionSelect() }
             .keyboardShortcut(for: .triggerRegionSelect, bindings: bindings)
-        Button(appState.mode == .fullScreenMask ? "退出全屏蒙版" : "全屏蒙版翻译") {
-            appState.toggleFullScreenMask()
+        Button("实时翻译") {
+            appState.enterRealtimeSelect()
         }
         .keyboardShortcut(for: .toggleFullScreenMask, bindings: bindings)
 
@@ -45,8 +45,8 @@ struct MenuBarView: View {
         case .idle: return "● 空闲"
         case .regionSelecting: return "● 选择区域中"
         case .regionTranslating: return appState.isProcessing ? "● 翻译中..." : "● 显示译文"
-        case .fullScreenMask: return "● 全屏蒙版"
-        case .fullScreenRegionSelecting: return "● 全屏选区中"
+        case .realtimeActive: return "● 实时翻译（\(appState.realtimeRegions.count)/8）"
+        case .realtimeSelecting: return "● 选择实时区域中"
         }
     }
 

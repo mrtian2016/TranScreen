@@ -14,75 +14,144 @@ struct AppearanceSettingsView: View {
         return s
     }
 
-    @State private var textColor: Color = .white
+    @State private var borderColor: Color = .black
+    @State private var badgeColor: Color = .black
+    @State private var badgeTextColor: Color = .white
 
     var body: some View {
         Form {
-            Section("蒙版") {
-                VStack(alignment: .leading) {
-                    Text("蒙版暗度: \(Int(settings.overlayOpacity * 100))%")
-                    Slider(
-                        value: Binding(
-                            get: { settings.overlayOpacity },
-                            set: { v in
-                                settings.overlayOpacity = v
-                                appState.overlayOpacity = v
-                                try? modelContext.save()
-                            }
-                        ),
-                        in: 0.1...0.9, step: 0.05
-                    )
-                }
-            }
-
-            Section("译文文字") {
-                ColorPicker("文字颜色", selection: $textColor)
-                    .onChange(of: textColor) { _, color in
+            Section("选区边框") {
+                ColorPicker("边框颜色", selection: $borderColor)
+                    .onChange(of: borderColor) { _, color in
                         if let hex = color.toHex() {
-                            settings.textColorHex = hex
+                            settings.selectionBorderColorHex = hex
+                            appState.objectWillChange.send()
                             try? modelContext.save()
                         }
                     }
 
-                Picker("字号模式", selection: Binding(
-                    get: { settings.fontSizeMode },
-                    set: { settings.fontSizeMode = $0; try? modelContext.save() }
-                )) {
-                    Text("自适应（推荐）").tag("adaptive")
-                    Text("固定大小").tag("fixed")
-                }
-                .pickerStyle(.radioGroup)
-
-                if settings.fontSizeMode == "fixed" {
-                    HStack {
-                        Text("固定字号: \(Int(settings.fixedFontSize))pt")
-                        Slider(
-                            value: Binding(
-                                get: { settings.fixedFontSize },
-                                set: { settings.fixedFontSize = $0; try? modelContext.save() }
-                            ),
-                            in: 9...36, step: 1
-                        )
+                Picker("边框样式", selection: Binding(
+                    get: { settings.selectionBorderStyle },
+                    set: {
+                        settings.selectionBorderStyle = $0
+                        appState.objectWillChange.send()
+                        try? modelContext.save()
                     }
+                )) {
+                    Text("四角").tag("corners")
+                    Text("完整边框").tag("full")
+                    Text("虚线边框").tag("dashed")
+                }
+                .pickerStyle(.segmented)
+
+                VStack(alignment: .leading) {
+                    Text("线宽: \(settings.selectionBorderLineWidth, specifier: "%.1f") pt")
+                    Slider(
+                        value: Binding(
+                            get: { settings.selectionBorderLineWidth },
+                            set: { v in
+                                settings.selectionBorderLineWidth = v
+                                appState.objectWillChange.send()
+                                try? modelContext.save()
+                            }
+                        ),
+                        in: 0.5...5.0, step: 0.1
+                    )
                 }
             }
 
-            Section("预览") {
-                ZStack {
-                    Color.gray.opacity(0.3)
-                    Text("译文预览文字")
-                        .font(.system(size: settings.fontSizeMode == "fixed" ? settings.fixedFontSize : 16))
-                        .foregroundStyle(textColor)
-                        .shadow(color: .black.opacity(0.8), radius: 2)
+            Section("工具条透明度") {
+                VStack(alignment: .leading) {
+                    Text("区域翻译: \(Int(settings.regionToolbarOpacity * 100))%")
+                    Slider(
+                        value: Binding(
+                            get: { settings.regionToolbarOpacity },
+                            set: {
+                                settings.regionToolbarOpacity = $0
+                                appState.objectWillChange.send()
+                                try? modelContext.save()
+                            }
+                        ),
+                        in: 0.2...1.0,
+                        step: 0.05
+                    )
                 }
-                .frame(height: 60)
-                .cornerRadius(8)
+
+                VStack(alignment: .leading) {
+                    Text("实时翻译: \(Int(settings.realtimeToolbarOpacity * 100))%")
+                    Slider(
+                        value: Binding(
+                            get: { settings.realtimeToolbarOpacity },
+                            set: {
+                                settings.realtimeToolbarOpacity = $0
+                                appState.objectWillChange.send()
+                                try? modelContext.save()
+                            }
+                        ),
+                        in: 0.2...1.0,
+                        step: 0.05
+                    )
+                }
+            }
+
+            Section("实时编号") {
+                ColorPicker("编号颜色", selection: $badgeColor)
+                    .onChange(of: badgeColor) { _, color in
+                        if let hex = color.toHex() {
+                            settings.realtimeBadgeColorHex = hex
+                            appState.objectWillChange.send()
+                            try? modelContext.save()
+                        }
+                    }
+
+                ColorPicker("文字颜色", selection: $badgeTextColor)
+                    .onChange(of: badgeTextColor) { _, color in
+                        if let hex = color.toHex() {
+                            settings.realtimeBadgeTextColorHex = hex
+                            appState.objectWillChange.send()
+                            try? modelContext.save()
+                        }
+                    }
+
+                VStack(alignment: .leading) {
+                    Text("背景透明度: \(Int(settings.realtimeBadgeOpacity * 100))%")
+                    Slider(
+                        value: Binding(
+                            get: { settings.realtimeBadgeOpacity },
+                            set: {
+                                settings.realtimeBadgeOpacity = $0
+                                appState.objectWillChange.send()
+                                try? modelContext.save()
+                            }
+                        ),
+                        in: 0.2...1.0,
+                        step: 0.05
+                    )
+                }
+
+                VStack(alignment: .leading) {
+                    Text("字号: \(settings.realtimeBadgeFontSize, specifier: "%.0f") pt")
+                    Slider(
+                        value: Binding(
+                            get: { settings.realtimeBadgeFontSize },
+                            set: {
+                                settings.realtimeBadgeFontSize = $0
+                                appState.objectWillChange.send()
+                                try? modelContext.save()
+                            }
+                        ),
+                        in: 9...18,
+                        step: 1
+                    )
+                }
             }
         }
         .formStyle(.grouped)
         .padding()
         .onAppear {
-            textColor = Color(hex: settings.textColorHex) ?? .white
+            borderColor = Color(hex: settings.selectionBorderColorHex) ?? .black
+            badgeColor = Color(hex: settings.realtimeBadgeColorHex) ?? .black
+            badgeTextColor = Color(hex: settings.realtimeBadgeTextColorHex) ?? .white
         }
     }
 }
@@ -98,12 +167,24 @@ extension Color {
 
     init?(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        guard Scanner(string: hex).scanHexInt64(&int) else { return nil }
+        guard let int = UInt64(hex, radix: 16) else { return nil }
         self.init(
             red: Double((int >> 16) & 0xFF) / 255,
             green: Double((int >> 8) & 0xFF) / 255,
             blue: Double(int & 0xFF) / 255
+        )
+    }
+}
+
+extension NSColor {
+    convenience init?(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        guard let int = UInt64(hex, radix: 16) else { return nil }
+        self.init(
+            calibratedRed: CGFloat(Double((int >> 16) & 0xFF) / 255.0),
+            green: CGFloat(Double((int >> 8) & 0xFF) / 255.0),
+            blue: CGFloat(Double(int & 0xFF) / 255.0),
+            alpha: 1
         )
     }
 }

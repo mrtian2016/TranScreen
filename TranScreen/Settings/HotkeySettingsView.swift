@@ -38,9 +38,16 @@ struct HotkeySettingsView: View {
                         action: action,
                         binding: bindingFor(action),
                         isRecording: recordingAction == action
-                    ) { recordingAction = action } onSpecChanged: { newSpec in
+                    ) {
+                        appState.pauseHotkeyMonitoringForRecording()
+                        recordingAction = action
+                    } onSpecChanged: { newSpec in
                         updateBinding(action: action, spec: newSpec)
                         recordingAction = nil
+                        appState.startHotkeyMonitoring(with: bindings)
+                    } onCancelRecording: {
+                        recordingAction = nil
+                        appState.startHotkeyMonitoring(with: bindings)
                     } onReset: {
                         updateBinding(action: action, spec: action.defaultBinding)
                         recordingAction = nil
@@ -63,6 +70,10 @@ struct HotkeySettingsView: View {
             .padding(8)
         }
         .onAppear { ensureDefaultBindings() }
+        .onDisappear {
+            recordingAction = nil
+            appState.startHotkeyMonitoring(with: bindings)
+        }
     }
 
     private func bindingFor(_ action: HotkeyAction) -> HotkeyBinding {
@@ -89,14 +100,19 @@ struct HotkeySettingsView: View {
     }
 
     private func ensureDefaultBindings() {
-        var added = false
+        var changed = false
         for action in HotkeyAction.allCases {
-            if !bindings.contains(where: { $0.actionRaw == action.rawValue }) {
+            if let existing = bindings.first(where: { $0.actionRaw == action.rawValue }) {
+                if !existing.spec.isValid {
+                    existing.spec = action.defaultBinding
+                    changed = true
+                }
+            } else {
                 modelContext.insert(HotkeyBinding(action: action))
-                added = true
+                changed = true
             }
         }
-        if added {
+        if changed {
             try? modelContext.save()
             appState.startHotkeyMonitoring(with: bindings)
         }
@@ -109,6 +125,7 @@ struct HotkeyRow: View {
     let isRecording: Bool
     let onStartRecording: () -> Void
     let onSpecChanged: (HotkeySpec) -> Void
+    let onCancelRecording: () -> Void
     let onReset: () -> Void
 
     @State private var localSpec: HotkeySpec = HotkeySpec(keyCode: -1, modifiers: [])
@@ -120,7 +137,11 @@ struct HotkeyRow: View {
             Spacer()
 
             Button(action: onStartRecording) {
-                HotkeyRecorder(spec: $localSpec, isRecording: $localIsRecording)
+                HotkeyRecorder(
+                    spec: $localSpec,
+                    isRecording: $localIsRecording,
+                    onCancelled: onCancelRecording
+                )
                     .frame(width: 120, height: 28)
             }
             .buttonStyle(.plain)

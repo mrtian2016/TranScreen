@@ -36,22 +36,31 @@ struct GeneralSettingsView: View {
             Section("默认模式") {
                 Picker("启动模式", selection: binding(\.defaultMode)) {
                     Text("截图选区").tag("region")
-                    Text("全屏蒙版").tag("fullscreen")
+                    Text("实时翻译").tag("realtime")
                 }
                 .pickerStyle(.radioGroup)
             }
 
-            Section("全屏扫描") {
-                Picker("扫描间隔", selection: binding(\.scanInterval)) {
-                    Text("1 秒（高频）").tag(1.0)
-                    Text("2 秒（推荐）").tag(2.0)
-                    Text("5 秒（省电）").tag(5.0)
+            Section("实时模式") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("扫描间隔: \(settings.scanInterval, specifier: "%.1f") 秒")
+                    Slider(
+                        value: binding(\.scanInterval),
+                        in: 0.1...10.0,
+                        step: 0.1
+                    )
                 }
-                Toggle("省电模式（固定 5 秒间隔）", isOn: binding(\.powerSavingEnabled))
             }
         }
         .formStyle(.grouped)
         .padding()
+        .onAppear {
+            if settings.defaultMode == "fullscreen" {
+                settings.defaultMode = "realtime"
+                try? modelContext.save()
+            }
+            settings.scanInterval = max(0.1, min(10.0, settings.scanInterval))
+        }
     }
 
     private func binding<T>(_ keyPath: ReferenceWritableKeyPath<AppSettings, T>) -> Binding<T> {

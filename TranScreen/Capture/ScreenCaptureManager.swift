@@ -4,7 +4,7 @@ import CoreGraphics
 
 actor ScreenCaptureManager {
 
-    func captureRegion(_ rect: CGRect) async throws -> CGImage {
+    func captureRegion(_ rect: CGRect, excludingWindowIDs: Set<CGWindowID> = []) async throws -> CGImage {
         // 用 NSScreen 作为权威坐标源，避免 SCDisplay.width/height 在不同 macOS 版本
         // 单位（点 vs 像素）不一致导致的尺寸错乱
         guard let nsScreen = NSScreen.screens.first(where: {
@@ -23,7 +23,8 @@ actor ScreenCaptureManager {
             throw CaptureError.noDisplay
         }
 
-        let filter = SCContentFilter(display: display, excludingWindows: [])
+        let excludedWindows = content.windows.filter { excludingWindowIDs.contains($0.windowID) }
+        let filter = SCContentFilter(display: display, excludingWindows: excludedWindows)
         let config = SCStreamConfiguration()
         // 输出尺寸明确按像素：逻辑点 × backing scale
         config.width = Int(screenW * scaleFactor)

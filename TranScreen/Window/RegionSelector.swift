@@ -3,6 +3,9 @@ import AppKit
 final class RegionSelectorView: NSView {
     var onRegionSelected: ((CGRect) -> Void)?
     var onCancelled: (() -> Void)?
+    var borderColor: NSColor = .black
+    var borderStyle: String = "corners"
+    var borderLineWidth: CGFloat = 1.4
 
     private var startPoint: NSPoint?
     private var currentRect: NSRect = .zero
@@ -56,6 +59,25 @@ final class RegionSelectorView: NSView {
     }
 
     private func drawCornerBorder(in rect: NSRect) {
+        switch borderStyle {
+        case "full":
+            let path = NSBezierPath(rect: rect)
+            borderColor.withAlphaComponent(0.92).setStroke()
+            path.lineWidth = borderLineWidth
+            path.stroke()
+            return
+        case "dashed":
+            let path = NSBezierPath(rect: rect)
+            var dash: [CGFloat] = [6, 4]
+            path.setLineDash(&dash, count: dash.count, phase: 0)
+            borderColor.withAlphaComponent(0.92).setStroke()
+            path.lineWidth = borderLineWidth
+            path.stroke()
+            return
+        default:
+            break
+        }
+
         let cornerLen = min(max(min(rect.width, rect.height) * 0.16, 14), 28)
         let path = NSBezierPath()
 
@@ -75,8 +97,8 @@ final class RegionSelectorView: NSView {
         path.line(to: NSPoint(x: rect.maxX, y: rect.minY))
         path.line(to: NSPoint(x: rect.maxX, y: rect.minY + cornerLen))
 
-        NSColor.black.withAlphaComponent(0.92).setStroke()
-        path.lineWidth = 1.4
+        borderColor.withAlphaComponent(0.92).setStroke()
+        path.lineWidth = borderLineWidth
         path.lineCapStyle = .square
         path.stroke()
     }

@@ -15,11 +15,11 @@ enum HotkeyAction: String, Codable, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .triggerRegionSelect: return "选区截图翻译"
-        case .toggleFullScreenMask: return "切换全屏蒙版"
-        case .fullScreenRegionSelect: return "全屏模式选区"
+        case .toggleFullScreenMask: return "实时翻译"
+        case .fullScreenRegionSelect: return "实时模式选区"
         case .exitToIdle: return "退出/取消"
-        case .increaseOpacity: return "增加蒙版暗度"
-        case .decreaseOpacity: return "降低蒙版暗度"
+        case .increaseOpacity: return "增加工具条不透明度"
+        case .decreaseOpacity: return "降低工具条不透明度"
         }
     }
 
@@ -88,6 +88,15 @@ struct HotkeySpec: Codable, Equatable, Hashable {
         case kVK_RightArrow: return "→"
         case kVK_ANSI_Equal: return "="
         case kVK_ANSI_Minus: return "-"
+        case kVK_ANSI_Comma: return ","
+        case kVK_ANSI_Period: return "."
+        case kVK_ANSI_Slash: return "/"
+        case kVK_ANSI_Semicolon: return ";"
+        case kVK_ANSI_Quote: return "'"
+        case kVK_ANSI_LeftBracket: return "["
+        case kVK_ANSI_RightBracket: return "]"
+        case kVK_ANSI_Backslash: return "\\"
+        case kVK_ANSI_Grave: return "`"
         case kVK_ANSI_A: return "A"
         case kVK_ANSI_B: return "B"
         case kVK_ANSI_C: return "C"
@@ -117,6 +126,7 @@ struct HotkeySpec: Codable, Equatable, Hashable {
         default: return "(\(code))"
         }
     }
+
 }
 
 extension CGEventFlags: @retroactive Codable {

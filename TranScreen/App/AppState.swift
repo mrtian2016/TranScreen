@@ -12,8 +12,36 @@ final class AppState: ObservableObject {
         case idle
         case regionSelecting
         case regionTranslating(CGRect)
-        case fullScreenMask
-        case fullScreenRegionSelecting
+        case realtimeActive
+        case realtimeSelecting
+    }
+
+    struct RealtimeRegion: Identifiable, Equatable {
+        let id: UUID
+        var screenRegion: CGRect
+        var translatedBlocks: [TranslatedBlock]
+        var lastTextSignature: String
+        var isProcessing: Bool
+        var toolbarOffset: CGSize
+        var lastCapturedImage: CGImage?
+        var showingOriginal: Bool
+        var displayNumber: Int
+
+        init(screenRegion: CGRect, displayNumber: Int) {
+            self.id = UUID()
+            self.screenRegion = screenRegion
+            self.translatedBlocks = []
+            self.lastTextSignature = ""
+            self.isProcessing = true
+            self.toolbarOffset = .zero
+            self.lastCapturedImage = nil
+            self.showingOriginal = false
+            self.displayNumber = displayNumber
+        }
+
+        static func == (lhs: RealtimeRegion, rhs: RealtimeRegion) -> Bool {
+            lhs.id == rhs.id
+        }
     }
 
     @Published var mode: Mode = .idle {
@@ -27,6 +55,8 @@ final class AppState: ObservableObject {
     @Published var lastError: String?
     @Published var showingOriginal = false
     @Published var selectedRegion: CGRect = .zero
+    @Published var realtimeRegions: [RealtimeRegion] = []
+    @Published var regionToolbarOffset: CGSize = .zero
 
     // 调试信息
     @Published var debugCapturedSize: CGSize = .zero
@@ -41,7 +71,9 @@ final class AppState: ObservableObject {
     private let textMerger = TextMerger()
     let translationManager = TranslationManager()
 
-    private var fullScreenTask: Task<Void, Never>?
+    private var realtimeTask: Task<Void, Never>?
+    private var isRealtimeRefreshInFlight = false
+    private var realtimePanelControllers: [UUID: RealtimeRegionPanelController] = [:]
     private let diffDetector = DiffDetector()
 
     /// Holds the clean original capture so the screenshot button saves the
@@ -54,8 +86,17 @@ final class AppState: ObservableObject {
     var sourceLang: String { settings?.sourceLang ?? "auto" }
     var targetLang: String { settings?.targetLang ?? "zh-Hans" }
     var scanInterval: TimeInterval {
-        (settings?.powerSavingEnabled == true) ? 5.0 : (settings?.scanInterval ?? 2.0)
+        max(0.1, min(10.0, settings?.scanInterval ?? 2.0))
     }
+    var selectionBorderColorHex: String { settings?.selectionBorderColorHex ?? "#000000" }
+    var selectionBorderStyle: String { settings?.selectionBorderStyle ?? "corners" }
+    var selectionBorderLineWidth: CGFloat { CGFloat(settings?.selectionBorderLineWidth ?? 1.4) }
+    var regionToolbarOpacity: Double { settings?.regionToolbarOpacity ?? 0.9 }
+    var realtimeToolbarOpacity: Double { settings?.realtimeToolbarOpacity ?? 0.5 }
+    var realtimeBadgeColorHex: String { settings?.realtimeBadgeColorHex ?? "#111111" }
+    var realtimeBadgeTextColorHex: String { settings?.realtimeBadgeTextColorHex ?? "#FFFFFF" }
+    var realtimeBadgeOpacity: Double { settings?.realtimeBadgeOpacity ?? 0.8 }
+    var realtimeBadgeFontSize: CGFloat { CGFloat(settings?.realtimeBadgeFontSize ?? 11.0) }
 
     // MARK: - 初始化
     init() {
@@ -80,8 +121,6 @@ final class AppState: ObservableObject {
 
     // MARK: - 状态机转换
     private func handleModeTransition(from old: Mode, to new: Mode) {
-        if case .fullScreenMask = old { stopFullScreenTimer() }
-
         guard let panel = panelController else { return }
 
         switch new {
@@ -91,6 +130,7 @@ final class AppState: ObservableObject {
             lastCapturedImage = nil
             isProcessing = false
             lastError = nil
+            clearRealtimeRegions()
 
         case .regionSelecting:
             panel.showForSelection()
@@ -99,11 +139,13 @@ final class AppState: ObservableObject {
             panel.showForTranslation(region: rect)
             processRegionCapture(region: rect)
 
-        case .fullScreenMask:
-            panel.showFullScreenMask()
-            startFullScreenTimer()
+        case .realtimeActive:
+            panel.hide()
+            if realtimeRegions.isEmpty {
+                stopRealtimeTimer()
+            }
 
-        case .fullScreenRegionSelecting:
+        case .realtimeSelecting:
             panel.showFullScreenForRegionSelection()
         }
     }
@@ -117,8 +159,17 @@ final class AppState: ObservableObject {
     }
 
     func toggleFullScreenMask() {
+        enterRealtimeSelect()
+    }
+
+    func enterRealtimeSelect() {
         checkPermissions()
-        mode = (mode == .fullScreenMask) ? .idle : .fullScreenMask
+        guard realtimeRegions.count < 8 else {
+            lastError = "实时翻译最多支持 8 个区域"
+            mode = realtimeRegions.isEmpty ? .idle : .realtimeActive
+            return
+        }
+        mode = .realtimeSelecting
     }
 
     func exitToIdle() {
@@ -126,14 +177,22 @@ final class AppState: ObservableObject {
     }
 
     func adjustOpacity(by delta: Double) {
-        overlayOpacity = max(0.1, min(0.9, overlayOpacity + delta))
-        settings?.overlayOpacity = overlayOpacity
+        guard let settings else { return }
+        objectWillChange.send()
+        settings.regionToolbarOpacity = max(0.2, min(1.0, settings.regionToolbarOpacity + delta))
+        settings.realtimeToolbarOpacity = max(0.2, min(1.0, settings.realtimeToolbarOpacity + delta))
     }
 
     func handleRegionSelected(_ rect: CGRect) {
         selectedRegion = rect
         showingOriginal = false
+        regionToolbarOffset = .zero
         mode = .regionTranslating(rect)
+    }
+
+    func handleRealtimeRegionSelected(_ rect: CGRect) {
+        addRealtimeRegion(rect)
+        mode = .realtimeActive
     }
 
     func copyDisplayedText() {
@@ -152,19 +211,40 @@ final class AppState: ObservableObject {
             return false
         }
 
-        let imageToSave: CGImage
-        if showingOriginal || translatedBlocks.isEmpty {
-            imageToSave = cgImage
-        } else if let rendered = renderDisplayedRegionScreenshot(baseImage: cgImage, region: region) {
-            imageToSave = rendered
-        } else {
-            lastError = "无法生成译文截图"
-            return false
-        }
+        guard let imageToSave = screenshotImage(
+            baseImage: cgImage,
+            region: region,
+            blocks: translatedBlocks,
+            showingOriginal: showingOriginal
+        ) else { return false }
 
+        return writeScreenshot(image: imageToSave, suffix: showingOriginal ? "original" : "translated")
+    }
+
+    private func screenshotImage(
+        baseImage: CGImage,
+        region: CGRect,
+        blocks: [TranslatedBlock],
+        showingOriginal: Bool
+    ) -> CGImage? {
+        if showingOriginal || blocks.isEmpty {
+            return baseImage
+        }
+        guard let rendered = renderDisplayedRegionScreenshot(
+            baseImage: baseImage,
+            region: region,
+            blocks: blocks,
+            showingOriginal: showingOriginal
+        ) else {
+            lastError = "无法生成译文截图"
+            return nil
+        }
+        return rendered
+    }
+
+    private func writeScreenshot(image: CGImage, suffix: String) -> Bool {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd_HHmmss"
-        let suffix = showingOriginal ? "original" : "translated"
         let filename = "TranScreen_\(suffix)_\(formatter.string(from: Date())).png"
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads", isDirectory: true)
@@ -174,7 +254,7 @@ final class AppState: ObservableObject {
             lastError = "无法创建图片输出"
             return false
         }
-        CGImageDestinationAddImage(dest, imageToSave, nil)
+        CGImageDestinationAddImage(dest, image, nil)
         if CGImageDestinationFinalize(dest) {
             lastError = nil
             return true
@@ -184,7 +264,12 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func renderDisplayedRegionScreenshot(baseImage: CGImage, region: CGRect) -> CGImage? {
+    private func renderDisplayedRegionScreenshot(
+        baseImage: CGImage,
+        region: CGRect,
+        blocks: [TranslatedBlock],
+        showingOriginal: Bool
+    ) -> CGImage? {
         let imageSize = CGSize(width: region.width, height: region.height)
         let scale = CGFloat(baseImage.width) / max(region.width, 1)
         let nsImage = NSImage(cgImage: baseImage, size: imageSize)
@@ -192,7 +277,7 @@ final class AppState: ObservableObject {
         let localRegion = OverlayCoordinateSpace.localRect(for: region, in: screen)
         let content = DisplayedRegionScreenshotView(
             baseImage: nsImage,
-            blocks: translatedBlocks,
+            blocks: blocks,
             showingOriginal: showingOriginal,
             localRegion: localRegion
         )
@@ -205,146 +290,47 @@ final class AppState: ObservableObject {
         return renderer.cgImage
     }
 
-    // MARK: - 核心 Pipeline：选区截图翻译
+    // MARK: - 核心 Pipeline：选区截图翻译 / 实时翻译共用
+
+    private struct BlockRenderMetadata {
+        let lineBoxes: [CGRect]
+        let bg: (Double, Double, Double)
+        let edges: LineGeometry?
+    }
+
+    private struct CaptureAnalysis {
+        let region: CGRect
+        let image: CGImage
+        let imageSize: CGSize
+        let mapper: CoordinateMapper
+        let mergedBlocks: [MergedTextBlock]
+        let metadata: [UUID: BlockRenderMetadata]
+        let signature: String
+    }
+
     func processRegionCapture(region: CGRect) {
         isProcessing = true
         lastError = nil
         Task {
             do {
                 let image = try await screenCapture.captureRegion(region)
-                let imageSize = CGSize(width: image.width, height: image.height)
-                self.debugCapturedSize = imageSize
+                self.debugCapturedSize = CGSize(width: image.width, height: image.height)
                 self.lastCapturedImage = image
 
-                guard image.width > 10, image.height > 10 else {
-                    self.lastError = "选区太小（\(image.width)×\(image.height)px），无法识别"
-                    self.isProcessing = false
-                    self.mode = .idle
-                    return
-                }
-
-                let ocrResults = try await ocrEngine.recognize(image: image)
-                self.debugOCRCount = ocrResults.count
-                guard !ocrResults.isEmpty else {
+                let analysis = try await analyzeCapture(image: image, region: region)
+                self.debugOCRCount = analysis.mergedBlocks.reduce(0) { $0 + $1.lines.count }
+                guard !analysis.mergedBlocks.isEmpty else {
                     self.lastError = "未识别到文字"
                     self.isProcessing = false
                     return
                 }
 
-                let textBlocks = ocrResults.map { TextBlock(from: $0) }
-                let mapper = CoordinateMapper(captureRegion: region, imageSize: imageSize)
-                let edgeDetector = EdgeDetector()
-                let segmenter = RegionSegmenter()
-
-                // RegionSegmenter is still used for paragraph gap splitting (so each
-                // visual paragraph translates independently), but we no longer use
-                // its representativeHeight — font size is per-block median to avoid
-                // collapsing title + body into one shared size when the cluster
-                // detector merges them.
-                let regions = segmenter.segment(blocks: textBlocks)
-
-                var allMerged: [MergedTextBlock] = []
-                var blockEdges: [UUID: LineGeometry] = [:]
-
-                for textRegion in regions {
-                    let merged = textMerger.merge(blocks: textRegion.blocks)
-                    for mb in merged {
-                        let edges = edgeDetector.detectLineEdges(blocks: mb.lines)
-                        if let e = edges { blockEdges[mb.id] = e }
-                    }
-                    allMerged.append(contentsOf: merged)
-                }
-
-                guard !allMerged.isEmpty else {
-                    self.lastError = "未识别到文字"
-                    self.isProcessing = false
-                    return
-                }
-
-                // Per-block bg color sampled now (used in the per-block fill).
-                var blockBg: [UUID: (Double, Double, Double)] = [:]
-                for mb in allMerged {
-                    blockBg[mb.id] = BackgroundSampler.sampleBackgroundColor(image: image, normalizedBox: mb.boundingBox)
-                }
-
-                // Resolve source language
-                let resolvedSource = (sourceLang == "auto")
-                    ? Self.detectLanguage(from: allMerged.map(\.text))
-                    : sourceLang
-
-                // Lookup by text — translation API returns blocks in input order but
-                // we want O(1) lookup against the original metadata.
-                var metaByText: [String: (edges: LineGeometry?, lineBoxes: [CGRect], bg: (Double, Double, Double))] = [:]
-                for mb in allMerged {
-                    let bg = blockBg[mb.id] ?? (1, 1, 1)
-                    metaByText[mb.text] = (blockEdges[mb.id], mb.lines.map(\.boundingBox), bg)
-                }
-
-                // Translate all blocks
-                do {
-                    let translated = try await translationManager.translate(
-                        blocks: allMerged,
-                        from: resolvedSource,
-                        to: targetLang
-                    )
-                    let rendered = translated.map { block -> TranslatedBlock in
-                        var b = block
-                        b.captureRegion = region
-                        b.screenRect = mapper.mapToSwiftUI(visionBox: b.visionBoundingBox)
-
-                        let meta = metaByText[block.originalText]
-
-                        // Font size from this block's own median line height — stable
-                        // across paragraphs of the same actual size, but title and
-                        // body get distinct sizes because their line heights differ.
-                        let lineBoxes = meta?.lineBoxes ?? [b.visionBoundingBox]
-                        b.fontSize = mapper.adaptiveFontSize(forLineBoxes: lineBoxes)
-                        b.screenLineRects = lineBoxes.map { mapper.mapToSwiftUI(visionBox: $0) }
-
-                        // Background color (already sampled above)
-                        let bg = meta?.bg ?? (1, 1, 1)
-                        b.bgRed = bg.0; b.bgGreen = bg.1; b.bgBlue = bg.2
-
-                        // Text color — sample per OCR line, then dominant across lines.
-                        // Pass the just-computed bg as reference so we filter "pixels
-                        // different from background" rather than "pixels different from
-                        // box mean luminance" (the latter mis-labels the abundant white
-                        // pixels of a white-on-black/black-on-white line as text).
-                        let (tr, tg, tb) = BackgroundSampler.sampleTextColor(
-                            image: image,
-                            normalizedBoxes: lineBoxes,
-                            background: bg
-                        )
-                        b.textR = tr; b.textG = tg; b.textB = tb
-
-                        // Line edges for indentation awareness
-                        if let edges = meta?.edges {
-                            b.lineEdges = (left: edges.leftEdge, right: edges.rightEdge)
-                        }
-                        return b
-                    }
-                    self.translatedBlocks = rendered
-                    self.isProcessing = false
-                } catch {
-                    let fallback = allMerged.map { mb -> TranslatedBlock in
-                        var b = TranslatedBlock(
-                            originalText: mb.text,
-                            translatedText: "",
-                            visionBoundingBox: mb.boundingBox,
-                            isVertical: mb.isVertical
-                        )
-                        b.captureRegion = region
-                        b.screenRect = mapper.mapToSwiftUI(visionBox: b.visionBoundingBox)
-                        b.screenLineRects = mb.lines.map { mapper.mapToSwiftUI(visionBox: $0.boundingBox) }
-                        let bg = blockBg[mb.id] ?? (1, 1, 1)
-                        b.bgRed = bg.0; b.bgGreen = bg.1; b.bgBlue = bg.2
-                        return b
-                    }
-                    self.translatedBlocks = fallback
+                let (renderedByRegion, error) = await translateAndRender(analyses: [analysis])
+                self.translatedBlocks = renderedByRegion[analysis.region] ?? []
+                if let error {
                     self.lastError = "翻译失败: \(error.localizedDescription)"
-                    self.isProcessing = false
                 }
-
+                self.isProcessing = false
             } catch {
                 self.lastError = error.localizedDescription
                 self.isProcessing = false
@@ -353,72 +339,360 @@ final class AppState: ObservableObject {
         }
     }
 
-    // MARK: - 全屏模式定时扫描
-    private func startFullScreenTimer() {
-        stopFullScreenTimer()
-        fullScreenTask = Task {
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(scanInterval))
-                guard !Task.isCancelled, mode == .fullScreenMask else { break }
-                await processFullScreenCapture()
+    private func analyzeCapture(image: CGImage, region: CGRect) async throws -> CaptureAnalysis {
+        guard image.width > 10, image.height > 10 else {
+            throw ScreenCaptureManager.CaptureError.captureFailed("选区太小（\(image.width)×\(image.height)px），无法识别")
+        }
+
+        let imageSize = CGSize(width: image.width, height: image.height)
+        let mapper = CoordinateMapper(captureRegion: region, imageSize: imageSize)
+        let ocrResults = try await ocrEngine.recognize(image: image)
+        let textBlocks = ocrResults.map { TextBlock(from: $0) }
+        let regions = RegionSegmenter().segment(blocks: textBlocks)
+        let edgeDetector = EdgeDetector()
+
+        var mergedBlocks: [MergedTextBlock] = []
+        var metadata: [UUID: BlockRenderMetadata] = [:]
+
+        for textRegion in regions {
+            let merged = textMerger.merge(blocks: textRegion.blocks)
+            for mb in merged {
+                let bg = BackgroundSampler.sampleBackgroundColor(image: image, normalizedBox: mb.boundingBox)
+                metadata[mb.id] = BlockRenderMetadata(
+                    lineBoxes: mb.lines.map(\.boundingBox),
+                    bg: bg,
+                    edges: edgeDetector.detectLineEdges(blocks: mb.lines)
+                )
             }
+            mergedBlocks.append(contentsOf: merged)
+        }
+
+        let signature = mergedBlocks.map(\.text).joined(separator: "\n")
+        return CaptureAnalysis(
+            region: region,
+            image: image,
+            imageSize: imageSize,
+            mapper: mapper,
+            mergedBlocks: mergedBlocks,
+            metadata: metadata,
+            signature: signature
+        )
+    }
+
+    private func translateAndRender(analyses: [CaptureAnalysis]) async -> (rendered: [CGRect: [TranslatedBlock]], error: Error?) {
+        let allBlocks = analyses.flatMap(\.mergedBlocks)
+        guard !allBlocks.isEmpty else { return ([:], nil) }
+
+        let resolvedSource = (sourceLang == "auto")
+            ? Self.detectLanguage(from: allBlocks.map(\.text))
+            : sourceLang
+
+        do {
+            let translated = try await translationManager.translate(
+                blocks: allBlocks,
+                from: resolvedSource,
+                to: targetLang
+            )
+            return (renderTranslatedBlocks(translated, analyses: analyses), nil)
+        } catch {
+            let fallback = allBlocks.map {
+                TranslatedBlock(
+                    originalText: $0.text,
+                    translatedText: "",
+                    visionBoundingBox: $0.boundingBox,
+                    isVertical: $0.isVertical
+                )
+            }
+            return (renderTranslatedBlocks(fallback, analyses: analyses), error)
         }
     }
 
-    private func stopFullScreenTimer() {
-        fullScreenTask?.cancel()
-        fullScreenTask = nil
+    private func renderTranslatedBlocks(_ translated: [TranslatedBlock], analyses: [CaptureAnalysis]) -> [CGRect: [TranslatedBlock]] {
+        var rendered: [CGRect: [TranslatedBlock]] = [:]
+        var cursor = 0
+
+        for analysis in analyses {
+            let count = analysis.mergedBlocks.count
+            guard count > 0 else {
+                rendered[analysis.region] = []
+                continue
+            }
+
+            let translatedSlice = Array(translated[cursor..<min(cursor + count, translated.count)])
+            let sourceSlice = Array(analysis.mergedBlocks[0..<min(count, analysis.mergedBlocks.count)])
+            cursor += count
+
+            rendered[analysis.region] = zip(sourceSlice, translatedSlice).map { source, block in
+                renderBlock(block, source: source, analysis: analysis)
+            }
+        }
+
+        return rendered
+    }
+
+    private func renderBlock(_ block: TranslatedBlock, source: MergedTextBlock, analysis: CaptureAnalysis) -> TranslatedBlock {
+        var b = block
+        b.captureRegion = analysis.region
+        b.screenRect = analysis.mapper.mapToSwiftUI(visionBox: b.visionBoundingBox)
+
+        let meta = analysis.metadata[source.id]
+        let lineBoxes = meta?.lineBoxes ?? source.lines.map(\.boundingBox)
+        b.fontSize = analysis.mapper.adaptiveFontSize(forLineBoxes: lineBoxes.isEmpty ? [b.visionBoundingBox] : lineBoxes)
+        b.screenLineRects = lineBoxes.map { analysis.mapper.mapToSwiftUI(visionBox: $0) }
+
+        let bg = meta?.bg ?? (1, 1, 1)
+        b.bgRed = bg.0; b.bgGreen = bg.1; b.bgBlue = bg.2
+        let (tr, tg, tb) = BackgroundSampler.sampleTextColor(
+            image: analysis.image,
+            normalizedBoxes: lineBoxes.isEmpty ? [b.visionBoundingBox] : lineBoxes,
+            background: bg
+        )
+        b.textR = tr; b.textG = tg; b.textB = tb
+
+        if let edges = meta?.edges {
+            b.lineEdges = (left: edges.leftEdge, right: edges.rightEdge)
+        }
+        return b
+    }
+
+    // MARK: - 实时翻译
+
+    private func stopRealtimeTimer() {
+        realtimeTask?.cancel()
+        realtimeTask = nil
         Task { await diffDetector.reset() }
     }
 
-    private func processFullScreenCapture() async {
-        do {
-            let image = try await screenCapture.captureFullScreen()
-            let changedRegions = await diffDetector.detectChangedRegions(current: image)
-            guard !changedRegions.isEmpty else { return }
+    func noteRealtimeUserActivity() {
+        guard !realtimeRegions.isEmpty else { return }
+        realtimeTask?.cancel()
+        realtimeTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(scanInterval))
+            guard !Task.isCancelled, !realtimeRegions.isEmpty else { return }
+            await refreshRealtimeRegions(force: false)
+        }
+    }
 
-            let ocrResults = try await ocrEngine.recognize(image: image)
-            guard !ocrResults.isEmpty else { return }
+    private func addRealtimeRegion(_ region: CGRect) {
+        guard realtimeRegions.count < 8 else {
+            lastError = "实时翻译最多支持 8 个区域"
+            return
+        }
+        let realtimeRegion = RealtimeRegion(screenRegion: region, displayNumber: nextRealtimeDisplayNumber())
+        realtimeRegions.append(realtimeRegion)
+        let controller = RealtimeRegionPanelController(appState: self, regionID: realtimeRegion.id, screenRegion: region)
+        realtimePanelControllers[realtimeRegion.id] = controller
+        controller.show()
+        layoutRealtimeToolbars()
+        Task { @MainActor in
+            await refreshRealtimeRegions(ids: [realtimeRegion.id], force: true)
+        }
+    }
 
-            let textBlocks = ocrResults.map { TextBlock(from: $0) }
-            let mergedBlocks = textMerger.merge(blocks: textBlocks)
+    func realtimeRegion(id: UUID) -> RealtimeRegion? {
+        realtimeRegions.first { $0.id == id }
+    }
 
-            let translated = try await translationManager.translate(
-                blocks: mergedBlocks,
-                from: sourceLang,
-                to: targetLang
-            )
+    func updateRealtimeToolbarOffset(id: UUID, offset: CGSize) {
+        guard let index = realtimeRegions.firstIndex(where: { $0.id == id }) else { return }
+        realtimeRegions[index].toolbarOffset = offset
+        layoutRealtimeToolbars()
+    }
 
-            let screenFrame = NSScreen.main?.frame ?? .zero
-            let imageSize = CGSize(width: image.width, height: image.height)
-            let mapper = CoordinateMapper(captureRegion: screenFrame, imageSize: imageSize)
+    func toggleRealtimeRegionOriginal(id: UUID) {
+        guard let index = realtimeRegions.firstIndex(where: { $0.id == id }) else { return }
+        realtimeRegions[index].showingOriginal.toggle()
+    }
 
-            let lineBoxesByText: [String: [CGRect]] = Dictionary(
-                uniqueKeysWithValues: mergedBlocks.map { ($0.text, $0.lines.map(\.boundingBox)) }
-            )
+    func setRealtimeRegionShowingOriginal(id: UUID, showingOriginal: Bool) {
+        guard let index = realtimeRegions.firstIndex(where: { $0.id == id }) else { return }
+        realtimeRegions[index].showingOriginal = showingOriginal
+    }
 
-            let rendered = translated.map { block -> TranslatedBlock in
-                var b = block
-                b.captureRegion = screenFrame
-                b.screenRect = mapper.mapToSwiftUI(visionBox: b.visionBoundingBox)
-                let lineBoxes = lineBoxesByText[block.originalText] ?? [block.visionBoundingBox]
-                b.screenLineRects = lineBoxes.map { mapper.mapToSwiftUI(visionBox: $0) }
-                b.fontSize = mapper.adaptiveFontSize(forLineBoxes: lineBoxes)
-                let (r, g, bl) = BackgroundSampler.sampleBackgroundColor(image: image, normalizedBox: b.visionBoundingBox)
-                b.bgRed = r; b.bgGreen = g; b.bgBlue = bl
-                return b
+    func copyRealtimeRegionText(id: UUID) {
+        guard let region = realtimeRegion(id: id) else { return }
+        let text = region.translatedBlocks.map {
+            region.showingOriginal ? $0.originalText : ($0.translatedText.isEmpty ? $0.originalText : $0.translatedText)
+        }.joined(separator: "\n")
+        guard !text.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    @discardableResult
+    func saveRealtimeScreenshot(id: UUID) -> Bool {
+        guard let region = realtimeRegion(id: id), let image = region.lastCapturedImage else {
+            lastError = "无可保存的实时截图"
+            return false
+        }
+        guard let imageToSave = screenshotImage(
+            baseImage: image,
+            region: region.screenRegion,
+            blocks: region.translatedBlocks,
+            showingOriginal: region.showingOriginal
+        ) else { return false }
+
+        let suffix = region.showingOriginal ? "realtime_original_\(region.displayNumber)" : "realtime_translated_\(region.displayNumber)"
+        return writeScreenshot(image: imageToSave, suffix: suffix)
+    }
+
+    func updateRealtimeToolbarSize(id: UUID, size: CGSize) {
+        if realtimePanelControllers[id]?.updateToolbarSize(size) == true {
+            layoutRealtimeToolbars()
+        }
+    }
+
+    func finishRealtimeToolbarDrag(id: UUID, frame: CGRect) {
+        guard let index = realtimeRegions.firstIndex(where: { $0.id == id }),
+              let controller = realtimePanelControllers[id] else { return }
+        realtimeRegions[index].toolbarOffset = controller.offset(forToolbarOrigin: frame.origin)
+        layoutRealtimeToolbars()
+    }
+
+    func realtimeToolbarContainsEventLocation(_ location: CGPoint) -> Bool {
+        let toolbarFrames = realtimePanelControllers.values.map(\.toolbarFrame)
+        if toolbarFrames.contains(where: { $0.contains(location) }) {
+            return true
+        }
+        for screen in NSScreen.screens {
+            let flipped = CGPoint(x: location.x, y: screen.frame.maxY - (location.y - screen.frame.minY))
+            if toolbarFrames.contains(where: { $0.contains(flipped) }) {
+                return true
+            }
+        }
+        return false
+    }
+
+    func closeRealtimeRegion(id: UUID) {
+        realtimePanelControllers[id]?.close()
+        realtimePanelControllers[id] = nil
+        realtimeRegions.removeAll { $0.id == id }
+        layoutRealtimeToolbars()
+        if realtimeRegions.isEmpty {
+            stopRealtimeTimer()
+            mode = .idle
+        }
+    }
+
+    private func clearRealtimeRegions() {
+        stopRealtimeTimer()
+        for controller in realtimePanelControllers.values {
+            controller.close()
+        }
+        realtimePanelControllers.removeAll()
+        realtimeRegions.removeAll()
+    }
+
+    private func refreshRealtimeRegions(ids: [UUID]? = nil, force: Bool) async {
+        guard !isRealtimeRefreshInFlight else { return }
+        let targetIDs = ids ?? realtimeRegions.map(\.id)
+        guard !targetIDs.isEmpty else { return }
+
+        isRealtimeRefreshInFlight = true
+        defer { isRealtimeRefreshInFlight = false }
+        let excludedWindowIDs = realtimeCaptureExcludedWindowIDs()
+
+        for id in targetIDs {
+            if let index = realtimeRegions.firstIndex(where: { $0.id == id }) {
+                realtimeRegions[index].isProcessing = true
+            }
+        }
+
+        var analyses: [(id: UUID, analysis: CaptureAnalysis)] = []
+        for id in targetIDs {
+            guard let index = realtimeRegions.firstIndex(where: { $0.id == id }) else { continue }
+            let region = realtimeRegions[index].screenRegion
+            do {
+                let image = try await screenCapture.captureRegion(region, excludingWindowIDs: excludedWindowIDs)
+                let analysis = try await analyzeCapture(image: image, region: region)
+                realtimeRegions[index].lastCapturedImage = image
+
+                if force || analysis.signature != realtimeRegions[index].lastTextSignature {
+                    analyses.append((id, analysis))
+                } else {
+                    realtimeRegions[index].isProcessing = false
+                }
+            } catch {
+                realtimeRegions[index].isProcessing = false
+                lastError = error.localizedDescription
+            }
+        }
+
+        guard !analyses.isEmpty else { return }
+
+        let (rendered, error) = await translateAndRender(analyses: analyses.map(\.analysis))
+        if let error {
+            lastError = "实时翻译失败: \(error.localizedDescription)"
+        }
+
+        for item in analyses {
+            guard let index = realtimeRegions.firstIndex(where: { $0.id == item.id }) else { continue }
+            realtimeRegions[index].translatedBlocks = rendered[item.analysis.region] ?? []
+            if error == nil {
+                realtimeRegions[index].lastTextSignature = item.analysis.signature
+            }
+            realtimeRegions[index].isProcessing = false
+        }
+    }
+
+    private func realtimeCaptureExcludedWindowIDs() -> Set<CGWindowID> {
+        Set(realtimePanelControllers.values.flatMap(\.windowIDs))
+    }
+
+    private func nextRealtimeDisplayNumber() -> Int {
+        let used = Set(realtimeRegions.map(\.displayNumber))
+        return (1...8).first { !used.contains($0) } ?? min(realtimeRegions.count + 1, 8)
+    }
+
+    private func layoutRealtimeToolbars() {
+        let orderedRegions = realtimeRegions.sorted { lhs, rhs in
+            lhs.displayNumber < rhs.displayNumber
+        }
+        var placedFrames: [CGRect] = []
+
+        for region in orderedRegions {
+            guard let controller = realtimePanelControllers[region.id] else { continue }
+            var frame = controller.toolbarFrame(forOffset: region.toolbarOffset)
+            frame = clamp(frame: frame, to: OverlayCoordinateSpace.screen(containing: region.screenRegion).frame, margin: 4)
+
+            let baseFrame = frame
+            let gap: CGFloat = 6
+            var column = 0
+            var row = 0
+            while placedFrames.contains(where: { $0.insetBy(dx: -gap, dy: -gap).intersects(frame) }) {
+                row += 1
+                frame.origin.y = baseFrame.origin.y + CGFloat(row) * (frame.height + gap)
+
+                let screenFrame = OverlayCoordinateSpace.screen(containing: region.screenRegion).frame
+                if frame.maxY > screenFrame.maxY - gap {
+                    column += 1
+                    row = 0
+                    frame.origin.x = baseFrame.origin.x - CGFloat(column) * (frame.width + gap)
+                    frame.origin.y = baseFrame.origin.y
+                }
+                frame = clamp(frame: frame, to: OverlayCoordinateSpace.screen(containing: region.screenRegion).frame, margin: 4)
+                if column > 8 { break }
             }
 
-            self.translatedBlocks = rendered
-
-        } catch {
-            print("全屏扫描错误: \(error)")
+            controller.setToolbarFrame(frame)
+            placedFrames.append(frame)
         }
+    }
+
+    private func clamp(frame: CGRect, to screenFrame: CGRect, margin: CGFloat) -> CGRect {
+        var result = frame
+        result.origin.x = max(screenFrame.minX + margin, min(result.origin.x, screenFrame.maxX - result.width - margin))
+        result.origin.y = max(screenFrame.minY + margin, min(result.origin.y, screenFrame.maxY - result.height - margin))
+        return result
     }
 
     // MARK: - 热键和引擎管理
     func startHotkeyMonitoring(with bindings: [HotkeyBinding]) {
         hotkeyManager.loadBindings(bindings)
+    }
+
+    func pauseHotkeyMonitoringForRecording() {
+        hotkeyManager.unregister()
     }
 
     func reloadEngines(from configs: [EngineConfig]) {

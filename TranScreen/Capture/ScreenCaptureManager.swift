@@ -59,7 +59,7 @@ actor ScreenCaptureManager {
 
         let cropRect = CGRect(x: clampedX, y: clampedY, width: clampedW, height: clampedH)
         guard let cropped = fullImage.cropping(to: cropRect) else {
-            throw CaptureError.captureFailed("裁剪失败")
+            throw CaptureError.captureFailed(L10n.tr("error.cropFailed"))
         }
 
         #if DEBUG
@@ -99,8 +99,8 @@ actor ScreenCaptureManager {
 
         var errorDescription: String? {
             switch self {
-            case .noDisplay: return "无法找到屏幕"
-            case .captureFailed(let msg): return "截图失败: \(msg)"
+            case .noDisplay: return L10n.tr("error.noDisplay")
+            case .captureFailed(let msg): return L10n.format("error.captureFailed", msg)
             }
         }
     }

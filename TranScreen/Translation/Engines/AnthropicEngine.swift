@@ -88,7 +88,7 @@ struct AnthropicCompatibleEngine: TranslationEngine {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let content = json["content"] as? [[String: Any]],
               let text = content.first?["text"] as? String else {
-            throw TranslationError.invalidResponse("Anthropic 响应格式错误")
+            throw TranslationError.invalidResponse(L10n.tr("error.anthropicResponseFormat"))
         }
 
         return parseNumberedResponse(text, expectedCount: texts.count)

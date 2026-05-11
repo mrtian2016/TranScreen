@@ -51,7 +51,7 @@ struct OllamaEngine: TranslationEngine {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let message = json["message"] as? [String: Any],
               let content = message["content"] as? String else {
-            throw TranslationError.invalidResponse("Ollama 响应格式错误")
+            throw TranslationError.invalidResponse(L10n.tr("error.ollamaResponseFormat"))
         }
 
         return parseNumberedResponse(content, expectedCount: texts.count)

@@ -42,18 +42,32 @@ TranScreen supports one-shot region translation and realtime translation regions
 - **Preferences**: configure source and target languages, realtime scan interval, selection border, toolbar opacity, and realtime badge style.
 - **Menu bar first**: no Dock icon; TranScreen stays quietly available from the macOS menu bar.
 
-## Screenshots And Demo Placeholders
+## Screenshots
 
-These assets are not committed yet. To avoid broken image links, this README keeps visible placeholders for now. Add the files under `docs/images/`, then replace the notes below with real images or GIFs.
+### Overlay Translation
 
-| Path | Asset type | What to show |
-|---|---|---|
-| `docs/images/hero-transcreen-overlay.png` | Wide screenshot, ideally `1600x900` or larger | TranScreen displaying translated text over a webpage, PDF, or another app. |
-| `docs/images/demo-region-translate.gif` | Short GIF or screen recording GIF | Press `⌘E`, drag a region, and show the translated overlay. |
-| `docs/images/demo-realtime-translate.gif` | Short GIF or screen recording GIF | Create one or more realtime regions and show automatic translation refresh. |
-| `docs/images/settings-engines.png` | Settings screenshot | Translation engine list plus the add/edit engine panel. |
-| `docs/images/settings-hotkeys.png` | Settings screenshot | Custom hotkey settings. |
-| `docs/images/settings-appearance.png` | Settings screenshot | Selection border, toolbar opacity, and realtime badge appearance settings. |
+| Before | After |
+|---|---|
+| <img src="./docs/images/hero-transcreen-before.png" alt="TranScreen before translation" width="420"> | <img src="./docs/images/hero-transcreen-overlay.png" alt="TranScreen overlay translation" width="420"> |
+
+### Preferences
+
+| Translation engines | Engine configuration |
+|---|---|
+| <img src="./docs/images/settings-engines0-en.png" alt="TranScreen translation engine settings" width="420"> | <img src="./docs/images/settings-engines1-en.png" alt="TranScreen engine configuration panel" width="420"> |
+
+| Hotkeys | Appearance |
+|---|---|
+| <img src="./docs/images/settings-hotkeys-en.png" alt="TranScreen hotkey settings" width="420"> | <img src="./docs/images/settings-appearance-en.png" alt="TranScreen appearance settings" width="420"> |
+
+### Demo GIFs Coming Soon
+
+The static screenshots are already available. Two short GIF demos are still planned:
+
+| Path | What to show |
+|---|---|
+| `docs/images/demo-region-translate.gif` | Press `⌘E`, drag a region, and show the translated overlay. |
+| `docs/images/demo-realtime-translate.gif` | Create one or more realtime regions and show automatic translation refresh. |
 
 ## Installation
 
@@ -109,15 +123,6 @@ TranScreen is a menu bar app. Use the menu bar icon to start translation, open P
 
 Core features are built on system frameworks, including SwiftUI, AppKit, ScreenCaptureKit, Vision, Translation, and SwiftData.
 
-## Development Status
-
-The current focus is the core screen translation experience: OCR, realtime region refresh, multiple translation engines, and overlay interactions. Planned follow-ups include:
-
-- GitHub Release packaging.
-- Complete screenshots and GIF demos.
-- More polished error messages and first-run guidance.
-- Auto-update or other release helper capabilities.
-
 ## License
 
 TranScreen is licensed under the [GNU General Public License v3.0](./LICENSE).
@@ -143,18 +148,32 @@ TranScreen 支持选区截图翻译和实时区域翻译，适合阅读外文网
 - **偏好设置**：可配置源语言、目标语言、实时扫描间隔、选区边框、工具条透明度和实时区域编号样式。
 - **菜单栏常驻**：无 Dock 图标，适合长期在后台待命。
 
-## 截图与演示占位
+## 截图
 
-下面这些图片还没有提交到仓库。添加素材前，README 不使用破损图片链接；你可以按文件名把图片放进 `docs/images/`，之后再把这些占位说明替换成真实图片或 GIF。
+### 译文叠加
 
-| 文件路径 | 图片类型 | 建议内容 |
-|---|---|---|
-| `docs/images/hero-transcreen-overlay.png` | 宽幅截图，建议 `1600x900` 或更高 | 展示 TranScreen 在网页、PDF 或其他应用上直接叠加译文的效果。 |
-| `docs/images/demo-region-translate.gif` | 短 GIF 或视频转 GIF | 展示按下 `⌘E`、拖拽选区、出现译文覆盖层的完整流程。 |
-| `docs/images/demo-realtime-translate.gif` | 短 GIF 或视频转 GIF | 展示创建一个或多个实时区域，并自动刷新译文。 |
-| `docs/images/settings-engines.png` | 设置窗口截图 | 展示翻译引擎列表，以及添加或编辑引擎的面板。 |
-| `docs/images/settings-hotkeys.png` | 设置窗口截图 | 展示自定义快捷键页面。 |
-| `docs/images/settings-appearance.png` | 设置窗口截图 | 展示选区边框、工具条透明度和实时编号样式设置。 |
+| 翻译前 | 翻译后 |
+|---|---|
+| <img src="./docs/images/hero-transcreen-before.png" alt="TranScreen 翻译前" width="420"> | <img src="./docs/images/hero-transcreen-overlay.png" alt="TranScreen 译文叠加" width="420"> |
+
+### 偏好设置
+
+| 翻译引擎 | 引擎配置 |
+|---|---|
+| <img src="./docs/images/settings-engines0.png" alt="TranScreen 翻译引擎设置" width="420"> | <img src="./docs/images/settings-engines1.png" alt="TranScreen 引擎配置面板" width="420"> |
+
+| 快捷键 | 外观 |
+|---|---|
+| <img src="./docs/images/settings-hotkeys.png" alt="TranScreen 快捷键设置" width="420"> | <img src="./docs/images/settings-appearance.png" alt="TranScreen 外观设置" width="420"> |
+
+### 演示 GIF 待补充
+
+静态截图已经可用，后续还可以继续补充两个短 GIF：
+
+| 文件路径 | 建议内容 |
+|---|---|
+| `docs/images/demo-region-translate.gif` | 展示按下 `⌘E`、拖拽选区、出现译文覆盖层的完整流程。 |
+| `docs/images/demo-realtime-translate.gif` | 展示创建一个或多个实时区域，并自动刷新译文。 |
 
 ## 安装
 
@@ -209,15 +228,6 @@ TranScreen 是菜单栏应用。启动后可以从菜单栏图标打开翻译、
 - Swift 6.0
 
 核心功能使用系统框架实现，包括 SwiftUI、AppKit、ScreenCaptureKit、Vision、Translation 和 SwiftData。
-
-## 开发状态
-
-当前重点是完善屏幕翻译核心体验，包括 OCR、实时区域刷新、多引擎翻译和覆盖层交互。后续计划包括：
-
-- GitHub Release 打包分发。
-- 更完整的截图和 GIF 演示。
-- 更细致的错误提示和首次启动引导。
-- 自动更新或其他发布辅助能力。
 
 ## License
 

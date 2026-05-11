@@ -50,6 +50,8 @@
 			102FAEB3267645C99A5BB011 = {isa = PBXBuildFile; fileRef = AA1D27B968C24F5C9A0C0382; };
 			928056974AC14B379B33BA5D = {isa = PBXBuildFile; fileRef = 027A1C9F1DC24CBE839DA046; };
 			999F4FE17BFE4AFD9F1CCEA3 = {isa = PBXBuildFile; fileRef = C9705F858B5948F6B99F1A3A; };
+		A10000000000000000000001 = {isa = PBXBuildFile; fileRef = A20000000000000000000001; };
+		A10000000000000000000002 = {isa = PBXBuildFile; fileRef = A30000000000000000000001; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -97,6 +99,15 @@
 			AA1D27B968C24F5C9A0C0382 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TranslationToolbarView.swift; path = TranslationToolbarView.swift; sourceTree = "<group>"; };
 			027A1C9F1DC24CBE839DA046 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RegionSegmenter.swift; path = RegionSegmenter.swift; sourceTree = "<group>"; };
 			C9705F858B5948F6B99F1A3A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = EdgeDetector.swift; path = EdgeDetector.swift; sourceTree = "<group>"; };
+		A20000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppLocalization.swift; path = AppLocalization.swift; sourceTree = "<group>"; };
+		A40000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		A40000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = "en.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		A40000000000000000000003 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = "ja.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		A40000000000000000000004 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ko; path = "ko.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		A40000000000000000000005 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = "es.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		A40000000000000000000006 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = "fr.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		A40000000000000000000007 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = "de.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		A40000000000000000000008 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = hi; path = "hi.lproj/Localizable.strings"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -153,6 +164,7 @@
 			isa = PBXGroup;
 			children = (
 				BC8E3BB514C98ED6C3B72A58,
+				A20000000000000000000001,
 				98FCFF18BF18B5BD0A1A6A16,
 				E1C62B50026B057F815027F2,
 				A4504F5DCD14D78CFBCB0548,
@@ -272,6 +284,7 @@
 		408FBE2D98A644B78B0C156A = {
 			isa = PBXGroup;
 			children = (
+				A30000000000000000000001,
 			);
 			name = Resources;
 			path = Resources;
@@ -319,6 +332,12 @@
 			knownRegions = (
 				en,
 				"zh-Hans",
+				ja,
+				ko,
+				es,
+				fr,
+				de,
+				hi,
 				Base,
 			);
 			mainGroup = ED238C0B160E46114FFC0887;
@@ -336,6 +355,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000000000000000000002,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -350,6 +370,7 @@
 				B2D8B9C0D97992941B58C70A,
 				2C1F92DB4D06AABD2918D53F,
 				FD216A69C002D6CDE1398D5D,
+				A10000000000000000000001,
 				439B5956820D3FB1CC444420,
 				6F14CFDB4378CB9D1517BDE1,
 				0DCF1331503AA9A5F1CE9204,
@@ -389,6 +410,24 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+		A30000000000000000000001 = {
+			isa = PBXVariantGroup;
+			children = (
+				A40000000000000000000001,
+				A40000000000000000000002,
+				A40000000000000000000003,
+				A40000000000000000000004,
+				A40000000000000000000005,
+				A40000000000000000000006,
+				A40000000000000000000007,
+				A40000000000000000000008,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
 		0FA92E83287D3AD99E2E0E85 = {

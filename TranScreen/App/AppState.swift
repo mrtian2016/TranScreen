@@ -165,7 +165,7 @@ final class AppState: ObservableObject {
     func enterRealtimeSelect() {
         checkPermissions()
         guard realtimeRegions.count < 8 else {
-            lastError = "实时翻译最多支持 8 个区域"
+            lastError = L10n.tr("error.realtimeMaxRegions")
             mode = realtimeRegions.isEmpty ? .idle : .realtimeActive
             return
         }
@@ -207,7 +207,7 @@ final class AppState: ObservableObject {
     @discardableResult
     func saveScreenshot(of region: CGRect) -> Bool {
         guard let cgImage = lastCapturedImage else {
-            lastError = "无可保存的截图"
+            lastError = L10n.tr("error.noScreenshotToSave")
             return false
         }
 
@@ -236,7 +236,7 @@ final class AppState: ObservableObject {
             blocks: blocks,
             showingOriginal: showingOriginal
         ) else {
-            lastError = "无法生成译文截图"
+            lastError = L10n.tr("error.renderScreenshotFailed")
             return nil
         }
         return rendered
@@ -251,7 +251,7 @@ final class AppState: ObservableObject {
         let url = downloadsURL.appendingPathComponent(filename)
 
         guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
-            lastError = "无法创建图片输出"
+            lastError = L10n.tr("error.createImageOutputFailed")
             return false
         }
         CGImageDestinationAddImage(dest, image, nil)
@@ -259,7 +259,7 @@ final class AppState: ObservableObject {
             lastError = nil
             return true
         } else {
-            lastError = "截图保存失败"
+            lastError = L10n.tr("error.screenshotSaveFailed")
             return false
         }
     }
@@ -320,7 +320,7 @@ final class AppState: ObservableObject {
                 let analysis = try await analyzeCapture(image: image, region: region)
                 self.debugOCRCount = analysis.mergedBlocks.reduce(0) { $0 + $1.lines.count }
                 guard !analysis.mergedBlocks.isEmpty else {
-                    self.lastError = "未识别到文字"
+                    self.lastError = L10n.tr("error.noTextRecognized")
                     self.isProcessing = false
                     return
                 }
@@ -328,7 +328,7 @@ final class AppState: ObservableObject {
                 let (renderedByRegion, error) = await translateAndRender(analyses: [analysis])
                 self.translatedBlocks = renderedByRegion[analysis.region] ?? []
                 if let error {
-                    self.lastError = "翻译失败: \(error.localizedDescription)"
+                    self.lastError = L10n.format("error.translationFailed", error.localizedDescription)
                 }
                 self.isProcessing = false
             } catch {
@@ -341,7 +341,9 @@ final class AppState: ObservableObject {
 
     private func analyzeCapture(image: CGImage, region: CGRect) async throws -> CaptureAnalysis {
         guard image.width > 10, image.height > 10 else {
-            throw ScreenCaptureManager.CaptureError.captureFailed("选区太小（\(image.width)×\(image.height)px），无法识别")
+            throw ScreenCaptureManager.CaptureError.captureFailed(
+                L10n.format("error.selectionTooSmall", image.width, image.height)
+            )
         }
 
         let imageSize = CGSize(width: image.width, height: image.height)
@@ -475,7 +477,7 @@ final class AppState: ObservableObject {
 
     private func addRealtimeRegion(_ region: CGRect) {
         guard realtimeRegions.count < 8 else {
-            lastError = "实时翻译最多支持 8 个区域"
+            lastError = L10n.tr("error.realtimeMaxRegions")
             return
         }
         let realtimeRegion = RealtimeRegion(screenRegion: region, displayNumber: nextRealtimeDisplayNumber())
@@ -522,7 +524,7 @@ final class AppState: ObservableObject {
     @discardableResult
     func saveRealtimeScreenshot(id: UUID) -> Bool {
         guard let region = realtimeRegion(id: id), let image = region.lastCapturedImage else {
-            lastError = "无可保存的实时截图"
+            lastError = L10n.tr("error.noRealtimeScreenshotToSave")
             return false
         }
         guard let imageToSave = screenshotImage(
@@ -622,7 +624,7 @@ final class AppState: ObservableObject {
 
         let (rendered, error) = await translateAndRender(analyses: analyses.map(\.analysis))
         if let error {
-            lastError = "实时翻译失败: \(error.localizedDescription)"
+            lastError = L10n.format("error.realtimeTranslationFailed", error.localizedDescription)
         }
 
         for item in analyses {
@@ -775,7 +777,7 @@ private struct DisplayedRegionScreenshotView: View {
             ? block.originalText
             : (block.translatedText.isEmpty ? block.originalText : block.translatedText)
 
-        Text(displayText.isEmpty ? "[空]" : displayText)
+        Text(displayText.isEmpty ? L10n.tr("emptyText") : displayText)
             .font(.system(size: block.fontSize, weight: .regular, design: .default))
             .foregroundStyle(textColor(for: block))
             .lineLimit(nil)

@@ -74,7 +74,7 @@ struct TranslationOverlayView: View {
         }()
         let size = block.fontSize
 
-        Text(displayText.isEmpty ? "[空]" : displayText)
+        Text(displayText.isEmpty ? L10n.tr("emptyText") : displayText)
             .font(.system(size: size, weight: .regular, design: .default))
             .foregroundStyle(textColor(for: block))
             .lineLimit(nil)

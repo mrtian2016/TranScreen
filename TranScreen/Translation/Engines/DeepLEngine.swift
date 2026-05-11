@@ -48,7 +48,7 @@ struct DeepLEngine: TranslationEngine {
 
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let translations = json["translations"] as? [[String: Any]] else {
-            throw TranslationError.invalidResponse("DeepL 响应格式错误")
+            throw TranslationError.invalidResponse(L10n.tr("error.deepLResponseFormat"))
         }
 
         return translations.compactMap { $0["text"] as? String }

@@ -63,7 +63,7 @@ final class HotkeyRecorderView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let text = isRecording ? "按下快捷键..." : currentSpec.displayString
+        let text = isRecording ? L10n.tr("hotkey.pressShortcut") : currentSpec.displayString
         let attr: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 13),
             .foregroundColor: isRecording ? NSColor.systemBlue : NSColor.labelColor

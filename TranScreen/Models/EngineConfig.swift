@@ -13,12 +13,12 @@ enum EngineType: String, Codable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .apple: return "Apple 翻译（离线）"
+        case .apple: return L10n.tr("engine.apple")
         case .openAICompatible: return "OpenAI Compatible"
         case .anthropicCompatible: return "Anthropic Compatible"
         case .googleCompatible: return "Google Compatible"
         case .deepL: return "DeepL"
-        case .ollama: return "Ollama（本地）"
+        case .ollama: return L10n.tr("engine.ollama")
         }
     }
 
@@ -75,7 +75,7 @@ final class EngineConfig {
     var sortOrder: Int
     var createdAt: Date
     var temperature: Double = 0.3
-    var systemPrompt: String = "你是一个有用的翻译助手"
+    var systemPrompt: String = L10n.tr("prompt.defaultSystem")
     var customPrompt: String = ""
 
     var engineType: EngineType {
@@ -98,7 +98,7 @@ final class EngineConfig {
         isEnabled: Bool = true,
         sortOrder: Int = 0,
         temperature: Double = 0.3,
-        systemPrompt: String = "你是一个有用的翻译助手",
+        systemPrompt: String = L10n.tr("prompt.defaultSystem"),
         customPrompt: String = ""
     ) {
         self.id = UUID()

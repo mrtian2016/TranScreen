@@ -34,7 +34,7 @@ final class AppleTranslationBridge: ObservableObject {
             }
             group.addTask {
                 try await Task.sleep(nanoseconds: 60_000_000_000)
-                throw TranslationError.invalidResponse("Apple 翻译超时（可能需要先下载语言包）")
+                throw TranslationError.invalidResponse(L10n.tr("error.appleTranslationTimeout"))
             }
             guard let result = try await group.next() else {
                 throw TranslationError.allEnginesFailed

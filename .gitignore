@@ -3,6 +3,9 @@
 !LICENSE
 !transcreen_app_icon_simple.png
 !transcreen_menubar_icon.png
+!docs
+!docs/**
+docs/.DS_Store
 !TranScreen.xcodeproj
 !TranScreen.xcodeproj/**
 !TranScreen

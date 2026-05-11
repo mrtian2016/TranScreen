@@ -167,12 +167,12 @@ struct EngineEditSheet: View {
     @State private var apiKey = ""
     @State private var isEnabled = true
     @State private var temperature: Double = 0.3
-    @State private var systemPrompt: String = "你是一个有用的翻译助手"
+    @State private var systemPrompt: String = L10n.tr("prompt.defaultSystem")
     @State private var customPrompt: String = ""
 
     var body: some View {
         VStack(spacing: 0) {
-            Text(engine == nil ? "添加翻译引擎" : "编辑翻译引擎")
+            Text(engine == nil ? L10n.tr("engine.addTitle") : L10n.tr("engine.editTitle"))
                 .font(.headline).padding()
             Divider()
 
@@ -207,7 +207,7 @@ struct EngineEditSheet: View {
                 }
 
                 if selectedType.supportsAPIKey {
-                    SecureField(selectedType.requiresAPIKey ? "API Key" : "API Key（可选）", text: $apiKey)
+                    SecureField(selectedType.requiresAPIKey ? "API Key" : L10n.tr("field.apiKeyOptional"), text: $apiKey)
                     Text(apiKeyHelpText)
                         .font(.caption).foregroundStyle(.secondary)
                 }
@@ -226,13 +226,13 @@ struct EngineEditSheet: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("系统提示词").font(.callout).bold()
                         TextField("初始化系统提示词", text: $systemPrompt)
-                            .help("发送给模型的系统级指令，定义翻译助手的基本行为")
+                            .help(L10n.tr("help.systemPrompt"))
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text("自定义提示词").font(.callout).bold()
                         TextField("翻译风格、术语偏好等额外指令", text: $customPrompt)
-                            .help("额外附加到系统提示词的用户自定义指令")
+                            .help(L10n.tr("help.customPrompt"))
                     }
                 }
 
@@ -258,10 +258,10 @@ struct EngineEditSheet: View {
 
     private var modelIDHint: String {
         switch selectedType {
-        case .openAICompatible: return "填写你的 OpenAI-compatible 服务支持的模型名"
-        case .anthropicCompatible: return "填写你的 Anthropic-compatible 服务支持的模型名"
-        case .googleCompatible: return "填写你的 Google-compatible 服务支持的模型名"
-        case .ollama: return "如: llama3, mistral, qwen2"
+        case .openAICompatible: return L10n.tr("hint.openAIModel")
+        case .anthropicCompatible: return L10n.tr("hint.anthropicModel")
+        case .googleCompatible: return L10n.tr("hint.googleModel")
+        case .ollama: return L10n.tr("hint.ollamaModel")
         default: return ""
         }
     }
@@ -282,13 +282,13 @@ struct EngineEditSheet: View {
     private var endpointPlaceholder: String {
         switch selectedType {
         case .openAICompatible:
-            return "Endpoint URL（如: https://your-host/v1）"
+            return L10n.tr("placeholder.openAIEndpoint")
         case .anthropicCompatible:
-            return "Endpoint URL（如: https://your-host/v1 或 .../v1/messages）"
+            return L10n.tr("placeholder.anthropicEndpoint")
         case .googleCompatible:
-            return "Endpoint URL（如: https://your-host/v1beta）"
+            return L10n.tr("placeholder.googleEndpoint")
         case .ollama:
-            return "Endpoint (默认: http://localhost:11434)"
+            return L10n.tr("placeholder.ollamaEndpoint")
         default:
             return "Endpoint URL"
         }
@@ -296,9 +296,9 @@ struct EngineEditSheet: View {
 
     private var apiKeyHelpText: String {
         if selectedType.requiresAPIKey {
-            return "API Key 将保存在本机应用配置中，不会请求系统钥匙串权限"
+            return L10n.tr("help.apiKeyRequired")
         }
-        return "API Key 可留空，适合本地服务或已在端点侧处理鉴权的兼容接口"
+        return L10n.tr("help.apiKeyOptional")
     }
 
     private func loadExisting() {
@@ -353,9 +353,9 @@ struct AppleLanguagePackSection: View {
     @State private var isPreparing = false
 
     private let langs: [(String, String)] = [
-        ("en", "英语"), ("zh-Hans", "简体中文"), ("zh-Hant", "繁体中文"),
-        ("ja", "日语"), ("ko", "韩语"), ("fr", "法语"), ("de", "德语"),
-        ("es", "西班牙语"), ("ru", "俄语"), ("it", "意大利语"), ("pt", "葡萄牙语")
+        ("en", "language.en"), ("zh-Hans", "language.zhHans"), ("zh-Hant", "language.zhHant"),
+        ("ja", "language.ja"), ("ko", "language.ko"), ("fr", "language.fr"), ("de", "language.de"),
+        ("es", "language.es"), ("ru", "language.ru"), ("it", "language.it"), ("pt", "language.pt")
     ]
 
     var body: some View {
@@ -366,10 +366,10 @@ struct AppleLanguagePackSection: View {
 
             HStack {
                 Picker("从", selection: $sourceLang) {
-                    ForEach(langs, id: \.0) { Text($0.1).tag($0.0) }
+                    ForEach(langs, id: \.0) { Text(L10n.tr($0.1)).tag($0.0) }
                 }
                 Picker("到", selection: $targetLang) {
-                    ForEach(langs, id: \.0) { Text($0.1).tag($0.0) }
+                    ForEach(langs, id: \.0) { Text(L10n.tr($0.1)).tag($0.0) }
                 }
             }
 
@@ -397,17 +397,17 @@ struct AppleLanguagePackSection: View {
 
     private func prepare() {
         guard #available(macOS 15, *) else {
-            status = "需要 macOS 15 或更新"
+            status = L10n.tr("applePack.requiresMacOS15")
             return
         }
         isPreparing = true
-        status = "准备中..."
+        status = L10n.tr("applePack.preparing")
         Task {
             do {
                 try await AppleTranslationBridge.shared.prepareLanguagePack(from: sourceLang, to: targetLang)
-                status = "✅ 语言包就绪"
+                status = L10n.tr("applePack.ready")
             } catch {
-                status = "❌ \(error.localizedDescription)"
+                status = L10n.format("applePack.failed", error.localizedDescription)
             }
             isPreparing = false
         }

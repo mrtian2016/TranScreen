@@ -45,7 +45,7 @@ struct AppearanceSettingsView: View {
                 .pickerStyle(.segmented)
 
                 VStack(alignment: .leading) {
-                    Text("线宽: \(settings.selectionBorderLineWidth, specifier: "%.1f") pt")
+                    Text(L10n.format("appearance.lineWidth", settings.selectionBorderLineWidth))
                     Slider(
                         value: Binding(
                             get: { settings.selectionBorderLineWidth },
@@ -62,7 +62,7 @@ struct AppearanceSettingsView: View {
 
             Section("工具条透明度") {
                 VStack(alignment: .leading) {
-                    Text("区域翻译: \(Int(settings.regionToolbarOpacity * 100))%")
+                    Text(L10n.format("appearance.regionToolbarOpacity", Int(settings.regionToolbarOpacity * 100)))
                     Slider(
                         value: Binding(
                             get: { settings.regionToolbarOpacity },
@@ -78,7 +78,7 @@ struct AppearanceSettingsView: View {
                 }
 
                 VStack(alignment: .leading) {
-                    Text("实时翻译: \(Int(settings.realtimeToolbarOpacity * 100))%")
+                    Text(L10n.format("appearance.realtimeToolbarOpacity", Int(settings.realtimeToolbarOpacity * 100)))
                     Slider(
                         value: Binding(
                             get: { settings.realtimeToolbarOpacity },
@@ -114,7 +114,7 @@ struct AppearanceSettingsView: View {
                     }
 
                 VStack(alignment: .leading) {
-                    Text("背景透明度: \(Int(settings.realtimeBadgeOpacity * 100))%")
+                    Text(L10n.format("appearance.badgeBackgroundOpacity", Int(settings.realtimeBadgeOpacity * 100)))
                     Slider(
                         value: Binding(
                             get: { settings.realtimeBadgeOpacity },
@@ -130,7 +130,7 @@ struct AppearanceSettingsView: View {
                 }
 
                 VStack(alignment: .leading) {
-                    Text("字号: \(settings.realtimeBadgeFontSize, specifier: "%.0f") pt")
+                    Text(L10n.format("appearance.badgeFontSize", settings.realtimeBadgeFontSize))
                     Slider(
                         value: Binding(
                             get: { settings.realtimeBadgeFontSize },

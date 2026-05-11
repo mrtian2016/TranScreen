@@ -12,14 +12,14 @@ enum TranslationError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .noAPIKey: return "未配置 API Key"
-        case .invalidEndpoint: return "Endpoint URL 无效"
-        case .networkError(let e): return "网络错误: \(e.localizedDescription)"
-        case .rateLimited: return "请求过于频繁"
-        case .invalidResponse(let s): return "响应格式错误: \(s)"
-        case .missingModelID: return "未配置 Model ID"
-        case .allEnginesFailed: return "所有翻译引擎均失败"
-        case .notAvailable: return "引擎不可用"
+        case .noAPIKey: return L10n.tr("error.noAPIKey")
+        case .invalidEndpoint: return L10n.tr("error.invalidEndpoint")
+        case .networkError(let e): return L10n.format("error.network", e.localizedDescription)
+        case .rateLimited: return L10n.tr("error.rateLimited")
+        case .invalidResponse(let s): return L10n.format("error.invalidResponse", s)
+        case .missingModelID: return L10n.tr("error.missingModelID")
+        case .allEnginesFailed: return L10n.tr("error.allEnginesFailed")
+        case .notAvailable: return L10n.tr("error.engineNotAvailable")
         }
     }
 }

@@ -94,7 +94,7 @@ struct OpenAICompatibleEngine: TranslationEngine {
               let choices = json["choices"] as? [[String: Any]],
               let message = choices.first?["message"] as? [String: Any],
               let content = message["content"] as? String else {
-            throw TranslationError.invalidResponse("无法解析 OpenAI 响应")
+            throw TranslationError.invalidResponse(L10n.tr("error.openAIResponseParseFailed"))
         }
         return content
     }

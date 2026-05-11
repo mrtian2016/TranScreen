@@ -42,11 +42,11 @@ struct MenuBarView: View {
 
     private var statusText: String {
         switch appState.mode {
-        case .idle: return "● 空闲"
-        case .regionSelecting: return "● 选择区域中"
-        case .regionTranslating: return appState.isProcessing ? "● 翻译中..." : "● 显示译文"
-        case .realtimeActive: return "● 实时翻译（\(appState.realtimeRegions.count)/8）"
-        case .realtimeSelecting: return "● 选择实时区域中"
+        case .idle: return L10n.tr("status.idle")
+        case .regionSelecting: return L10n.tr("status.regionSelecting")
+        case .regionTranslating: return appState.isProcessing ? L10n.tr("status.translating") : L10n.tr("status.showingTranslation")
+        case .realtimeActive: return L10n.format("status.realtimeActive", appState.realtimeRegions.count)
+        case .realtimeSelecting: return L10n.tr("status.realtimeSelecting")
         }
     }
 

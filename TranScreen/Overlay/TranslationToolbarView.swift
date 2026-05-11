@@ -34,10 +34,10 @@ struct TranslationToolbar: View {
                 showingOriginal.toggle()
             } label: {
                 Image(systemName: showingOriginal ? "character.book.closed.fill" : "character.book.closed")
-                Text(showingOriginal ? "原文" : "译文")
+                Text(showingOriginal ? L10n.tr("toolbar.original") : L10n.tr("toolbar.translation"))
             }
             .buttonStyle(.borderless)
-            .help("点击切换原文/译文")
+            .help(L10n.tr("toolbar.toggleHelp"))
 
             Divider().frame(height: 16)
 
@@ -51,11 +51,11 @@ struct TranslationToolbar: View {
             } label: {
                 Image(systemName: copied ? "checkmark" : "doc.on.doc")
                     .foregroundStyle(copied ? .green : .primary)
-                Text(copied ? "已复制" : "复制")
+                Text(copied ? L10n.tr("toolbar.copied") : L10n.tr("toolbar.copy"))
                     .foregroundStyle(copied ? .green : .primary)
             }
             .buttonStyle(.borderless)
-            .help("复制当前显示的文本")
+            .help(L10n.tr("toolbar.copyDisplayedHelp"))
 
             Button {
                 if onSaveImage() {
@@ -68,11 +68,11 @@ struct TranslationToolbar: View {
             } label: {
                 Image(systemName: saved ? "checkmark" : "photo")
                     .foregroundStyle(saved ? .green : .primary)
-                Text(saved ? "已截图" : "截图")
+                Text(saved ? L10n.tr("toolbar.savedScreenshot") : L10n.tr("toolbar.screenshot"))
                     .foregroundStyle(saved ? .green : .primary)
             }
             .buttonStyle(.borderless)
-            .help("保存当前画面为 PNG")
+            .help(L10n.tr("toolbar.saveImageHelp"))
 
             Divider().frame(height: 16)
 
@@ -82,7 +82,7 @@ struct TranslationToolbar: View {
                 Image(systemName: "xmark.circle")
             }
             .buttonStyle(.borderless)
-            .help("关闭翻译叠加层")
+            .help(L10n.tr("toolbar.closeOverlayHelp"))
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -165,7 +165,7 @@ struct TranslationToolbar: View {
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(.secondary)
             .frame(width: 14, height: 18)
-            .help("拖动工具条")
+            .help(L10n.tr("toolbar.dragHelp"))
     }
 }
 
@@ -207,7 +207,7 @@ struct RealtimeToolbar: View {
                 PanelDragHandleView(onDragEnded: onDragEnded)
                     .frame(width: max(44, badgeFontSize + 34), height: 24)
             }
-            .help("拖动工具条")
+            .help(L10n.tr("toolbar.dragHelp"))
 
             Divider().frame(height: 16)
 
@@ -221,10 +221,10 @@ struct RealtimeToolbar: View {
                 showingOriginal.toggle()
             } label: {
                 Image(systemName: showingOriginal ? "character.book.closed.fill" : "character.book.closed")
-                Text(showingOriginal ? "原文" : "译文")
+                Text(showingOriginal ? L10n.tr("toolbar.original") : L10n.tr("toolbar.translation"))
             }
             .buttonStyle(.borderless)
-            .help("点击切换原文/译文")
+            .help(L10n.tr("toolbar.toggleHelp"))
 
             Divider().frame(height: 16)
 
@@ -238,11 +238,11 @@ struct RealtimeToolbar: View {
             } label: {
                 Image(systemName: copied ? "checkmark" : "doc.on.doc")
                     .foregroundStyle(copied ? .green : .primary)
-                Text(copied ? "已复制" : "复制")
+                Text(copied ? L10n.tr("toolbar.copied") : L10n.tr("toolbar.copy"))
                     .foregroundStyle(copied ? .green : .primary)
             }
             .buttonStyle(.borderless)
-            .help("复制当前区域文本")
+            .help(L10n.tr("toolbar.copyRegionHelp"))
 
             Button {
                 if onSaveImage() {
@@ -255,11 +255,11 @@ struct RealtimeToolbar: View {
             } label: {
                 Image(systemName: saved ? "checkmark" : "photo")
                     .foregroundStyle(saved ? .green : .primary)
-                Text(saved ? "已截图" : "截图")
+                Text(saved ? L10n.tr("toolbar.savedScreenshot") : L10n.tr("toolbar.screenshot"))
                     .foregroundStyle(saved ? .green : .primary)
             }
             .buttonStyle(.borderless)
-            .help("保存当前实时区域为 PNG")
+            .help(L10n.tr("toolbar.saveRealtimeImageHelp"))
 
             Divider().frame(height: 16)
 
@@ -267,7 +267,7 @@ struct RealtimeToolbar: View {
                 Image(systemName: "xmark.circle.fill")
             }
             .buttonStyle(.borderless)
-            .help("关闭此实时翻译区域")
+            .help(L10n.tr("toolbar.closeRealtimeHelp"))
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)

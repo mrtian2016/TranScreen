@@ -84,7 +84,7 @@ struct HotkeySettingsView: View {
         // 冲突检测
         for other in HotkeyAction.allCases where other != action {
             if bindingFor(other).spec == spec {
-                conflictWarning = "与\u{201C}\(other.displayName)\u{201D}冲突"
+                conflictWarning = L10n.format("hotkey.conflict", other.displayName)
                 return
             }
         }
@@ -150,7 +150,7 @@ struct HotkeyRow: View {
                 Image(systemName: "arrow.counterclockwise").foregroundStyle(.secondary)
             }
             .buttonStyle(.borderless)
-            .help("恢复默认: \(action.defaultBinding.displayString)")
+            .help(L10n.format("hotkey.resetDefaultHelp", action.defaultBinding.displayString))
 
             Toggle("", isOn: Binding(
                 get: { binding.isEnabled },

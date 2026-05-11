@@ -14,12 +14,12 @@ enum HotkeyAction: String, Codable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .triggerRegionSelect: return "选区截图翻译"
-        case .toggleFullScreenMask: return "实时翻译"
-        case .fullScreenRegionSelect: return "实时模式选区"
-        case .exitToIdle: return "退出/取消"
-        case .increaseOpacity: return "增加工具条不透明度"
-        case .decreaseOpacity: return "降低工具条不透明度"
+        case .triggerRegionSelect: return L10n.tr("hotkey.regionCaptureTranslate")
+        case .toggleFullScreenMask: return L10n.tr("hotkey.realtimeTranslate")
+        case .fullScreenRegionSelect: return L10n.tr("hotkey.realtimeRegionSelect")
+        case .exitToIdle: return L10n.tr("hotkey.exitOrCancel")
+        case .increaseOpacity: return L10n.tr("hotkey.increaseToolbarOpacity")
+        case .decreaseOpacity: return L10n.tr("hotkey.decreaseToolbarOpacity")
         }
     }
 

@@ -104,7 +104,7 @@ struct GoogleCompatibleEngine: TranslationEngine {
               let content = candidates.first?["content"] as? [String: Any],
               let parts = content["parts"] as? [[String: Any]],
               let text = parts.first?["text"] as? String else {
-            throw TranslationError.invalidResponse("Gemini 响应格式错误")
+            throw TranslationError.invalidResponse(L10n.tr("error.geminiResponseFormat"))
         }
 
         return parseNumberedResponse(text, expectedCount: texts.count)

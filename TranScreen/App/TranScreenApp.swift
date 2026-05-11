@@ -5,6 +5,10 @@ import SwiftData
 struct TranScreenApp: App {
     @StateObject private var appState = AppState()
 
+    init() {
+        L10n.applySavedLanguage()
+    }
+
     let sharedModelContainer: ModelContainer = {
         let schema = Schema([EngineConfig.self, AppSettings.self, HotkeyBinding.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
@@ -37,10 +41,13 @@ struct TranScreenApp: App {
         // 加载或创建 AppSettings
         let settingsDesc = FetchDescriptor<AppSettings>()
         if let settings = try? ctx.fetch(settingsDesc).first {
+            settings.displayLanguage = AppDisplayLanguage.normalized(settings.displayLanguage)
+            L10n.setPreferredLanguage(settings.displayLanguage)
             appState.settings = settings
             appState.overlayOpacity = settings.overlayOpacity
         } else {
             let settings = AppSettings()
+            L10n.setPreferredLanguage(settings.displayLanguage)
             ctx.insert(settings)
             try? ctx.save()
             appState.settings = settings

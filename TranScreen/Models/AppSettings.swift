@@ -21,6 +21,7 @@ final class AppSettings {
     var realtimeBadgeTextColorHex: String = "#FFFFFF"
     var realtimeBadgeOpacity: Double = 0.8
     var realtimeBadgeFontSize: Double = 11.0
+    var displayLanguage: String = L10n.defaultLanguage
 
     init() {
         self.sourceLang = "auto"
@@ -41,5 +42,6 @@ final class AppSettings {
         self.realtimeBadgeTextColorHex = "#FFFFFF"
         self.realtimeBadgeOpacity = 0.8
         self.realtimeBadgeFontSize = 11.0
+        self.displayLanguage = L10n.defaultLanguage
     }
 }

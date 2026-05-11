@@ -1,10 +1,7 @@
 name: Release
 
-# Builds, signs, notarizes, staples, and uploads a DMG to a GitHub draft Release.
-#
-# Trigger by pushing a tag like v1.2.0, or run manually from the Actions tab.
-#
-# Requires six repository secrets — see docs/RELEASING.md.
+# Builds an unsigned TranScreen.app zip and publishes it as a GitHub Release.
+# Trigger by pushing a tag like v1.2.3, or run manually from the Actions tab.
 
 on:
   push:
@@ -13,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag name to release (e.g. v1.2.0)'
+        description: 'Tag name to release (e.g. v1.2.3)'
         required: true
 
 permissions:
@@ -27,10 +24,13 @@ jobs:
     env:
       SCHEME: TranScreen
       CONFIGURATION: Release
+      DERIVED_DATA: build/DerivedData
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
       - name: Select latest Xcode
         run: |
@@ -44,7 +44,7 @@ jobs:
           sudo xcode-select -s "$XCODE/Contents/Developer"
           xcodebuild -version
 
-      - name: Resolve version
+      - name: Resolve tag
         id: ver
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -53,60 +53,68 @@ jobs:
             TAG="${GITHUB_REF#refs/tags/}"
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "archive=TranScreen-${TAG}-unsigned.zip" >> "$GITHUB_OUTPUT"
 
-      - name: Import Developer ID certificate
-        env:
-          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
-          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+      - name: Build unsigned app
         run: |
           set -euo pipefail
-          CERT_PATH="$RUNNER_TEMP/dev_id.p12"
-          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          rm -rf build
+          xcodebuild \
+            -project TranScreen.xcodeproj \
+            -scheme "$SCHEME" \
+            -configuration "$CONFIGURATION" \
+            -derivedDataPath "$DERIVED_DATA" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
 
-          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o "$CERT_PATH"
-
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$CERT_PATH" -P "$P12_PASSWORD" \
-            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-          security set-key-partition-list -S apple-tool:,apple:,codesign: \
-            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
-
-      - name: Store notarization credentials
-        env:
-          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
-          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
-          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
-        run: |
-          xcrun notarytool store-credentials transcreen-notary \
-            --apple-id "$NOTARY_APPLE_ID" \
-            --team-id "$NOTARY_TEAM_ID" \
-            --password "$NOTARY_PASSWORD"
-
-      - name: Build, sign, notarize, package
-        env:
-          TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
-          NOTARY_PROFILE: transcreen-notary
-        run: |
-          chmod +x ./build.sh
-          ./build.sh
-
-      - name: Locate artifacts
+      - name: Package app zip
         id: artifacts
         run: |
-          DMG=$(ls build/TranScreen-*.dmg | head -n 1)
-          echo "dmg=$DMG" >> "$GITHUB_OUTPUT"
-          echo "dmg_name=$(basename "$DMG")" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          APP_PATH="$DERIVED_DATA/Build/Products/$CONFIGURATION/TranScreen.app"
+          ZIP_PATH="build/${{ steps.ver.outputs.archive }}"
+
+          if [ ! -d "$APP_PATH" ]; then
+            echo "::error::TranScreen.app was not found at $APP_PATH"
+            find "$DERIVED_DATA/Build/Products" -maxdepth 3 -print || true
+            exit 1
+          fi
+
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP_PATH"
+          echo "zip=$ZIP_PATH" >> "$GITHUB_OUTPUT"
+          echo "zip_name=$(basename "$ZIP_PATH")" >> "$GITHUB_OUTPUT"
+
+      - name: Write release notes
+        run: |
+          cat > release-notes.md <<'EOF'
+          This release contains an unsigned, unnotarized TranScreen.app zip.
+
+          Because this build is unsigned, macOS may block it after you copy TranScreen.app to /Applications.
+          After installing, run these commands:
+
+          ```bash
+          xattr -dr com.apple.quarantine /Applications/TranScreen.app
+          open /Applications/TranScreen.app
+          ```
+
+          If macOS still blocks the app, run the same commands again after confirming TranScreen.app is in /Applications:
+
+          ```bash
+          xattr -dr com.apple.quarantine /Applications/TranScreen.app
+          open /Applications/TranScreen.app
+          ```
+
+          Signed/notarized build by Martin:
+          https://github.com/mrtian2016/TranScreen/releases/tag/${{ steps.ver.outputs.tag }}
+          EOF
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.artifacts.outputs.dmg_name }}
-          path: ${{ steps.artifacts.outputs.dmg }}
+          name: ${{ steps.artifacts.outputs.zip_name }}
+          path: ${{ steps.artifacts.outputs.zip }}
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
@@ -114,6 +122,7 @@ jobs:
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
           name: ${{ steps.ver.outputs.tag }}
-          draft: true
-          generate_release_notes: true
-          files: ${{ steps.artifacts.outputs.dmg }}
+          draft: false
+          prerelease: false
+          body_path: release-notes.md
+          files: ${{ steps.artifacts.outputs.zip }}

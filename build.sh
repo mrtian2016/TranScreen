@@ -77,7 +77,7 @@ xcodebuild \
     CODE_SIGN_IDENTITY="Developer ID Application" \
     DEVELOPMENT_TEAM="$TEAM_ID" \
     OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime" \
-    "${VERSION_SETTINGS[@]}" \
+    ${VERSION_SETTINGS[@]+"${VERSION_SETTINGS[@]}"} \
     archive
 
 step "Exporting Developer ID signed app"
